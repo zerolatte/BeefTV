@@ -7,6 +7,57 @@ description: BeefTV后端核心持久化表与状态边界
 
 后端通过 GORM 管理本地 SQLite 表结构。Backend 启动时按版本顺序应用缺失迁移并写入 `local_schema_migrations`。业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。
 
+## 平台数据与运行模式标记
+
+平台模式仍按阶段开发，不是可部署产品。平台使用单独的数据目录及其中的持久 SQLite 文件；只有 local 可接纳没有运行模式标记的历史数据库。启动在业务迁移前检查运行标记，防止本地和平台程序交叉打开数据。
+
+local 和 platform 的持久数据库必须直接位于各自的数据目录。`DATABASE_URL` 可指定本地目录内的文件及 SQLite 参数，不能指向其他目录或嵌套子目录；平台固定使用目录内的 `open_ai_canvas.db`。打开前解析文件地址和路径别名，打开后通过 SQLite 实际文件再次校验，避免目录锁与被写数据库不一致。本地内存数据库仅用于测试，平台不接受内存数据库。
+
+持久数据库主文件必须是单一链接的普通文件；启动、备份和导入拒绝具有多个硬链接的数据库。目录互斥锁不允许被数据库硬链接副本绕过，不支持以硬链接克隆可运行工作区。
+
+目录文件 `.runtime-mode.json` 与 SQLite 表 `runtime_mode_markers` 各保存模式、标记版本和随机 `directory_id`，两侧必须匹配。仅目录标记丢失时原模式可根据数据库标记恢复；目录已标记但数据库标记缺失时拒绝启动。备份/恢复必须一起保留数据库、目录标记和 `.settings-key`。
+
+平台身份与内容归属分开：账号 ID 不写入现有业务表的 `user_id`。`platform_account_workspaces` 对账号和工作区分别唯一绑定；项目、画布等现有内容仍以工作区 ID 归属。开户在同一事务中创建账号、凭据、工作区及绑定、点数账户、存储账户与初始发放流水。
+
+| 表 | 当前用途与边界 |
+| --- | --- |
+| `runtime_mode_markers` | local/platform 共用的启动保护，绑定模式与随机目录标识，不属于业务迁移序列 |
+| `platform_schema_migrations` | 独立平台 schema 版本，不写入本地迁移序列 |
+| `platform_accounts`、`platform_credentials`、`platform_account_workspaces` | 账号、Argon2id 密码凭据和一对一工作区绑定 |
+| `platform_sessions`、`platform_bootstrap_markers` | 会话摘要、过期/撤销状态和一次性管理员引导标记 |
+| `platform_import_receipts` | 来源文件清单 SHA-256 为主键，来源工作区及目标账号分别唯一；重复导入返回原绑定，不重复开户或发放 |
+| `platform_security_events`、`platform_audits` | 账号安全事件和管理员动作审计 |
+| `platform_quota_accounts`、`platform_usage_ledgers` | 点数汇总与追加流水；发放、调整、预留、结算、释放及补偿分别记录唯一事件 |
+| `platform_execution_intents` | 一次执行冻结账号、工作区、任务、模型/路由/凭据/价格版本和整数点数；状态越过提交边界后不能重新提交 |
+| `platform_request_receipts` | `(workspace_id,kind,request_key)` 唯一，绑定业务请求摘要和执行意图；重放不再预留 |
+| `platform_workflow_requests` | `(workspace_id,kind,request_key)` 唯一，绑定工作流运行；同一重试标识不能用于另一个运行 |
+| `platform_point_adjustments` | `(actor_account_id,request_key)` 唯一，保存有原因的管理员调整回执 |
+| `platform_execution_reviews` | 每个超时意图一份人工终局核对；操作者与请求键唯一，保存原状态、终局事实及依据 |
+| `platform_storage_accounts` | 每账号的存储上限、已用和预留字节数；新增及扩展使用条件更新校验容量 |
+| `platform_storage_reservations` | `(workspace_id,business_key)` 唯一；保存用途、声明字节数、实际预留及终结状态；上传恢复只清理上传预留 |
+| `platform_storage_objects` | `(workspace_id,object_identity)` 唯一；同一工作区同一物理资源只计一次容量 |
+| `platform_upload_requests` | `(workspace_id,request_key)` 唯一；永久绑定上传内容摘要和元数据，分片目录清理后仍拒绝同键不同内容 |
+| `platform_asset_deletions`、`platform_deletion_objects` | 素材删除意图与逐对象完成证据；复用 `resource_deletion_jobs` 的租约和重试，所有对象完成后原子清理元数据并释放容量 |
+| `platform_model_grants` | `(account_id, logical_model_id)` 主键，账号授权不缓存到共享目录 |
+| `platform_channel_states` | 每渠道一个当前凭据引用与原子版本序列 |
+| `platform_credential_versions` | `(channel_id, version)` 唯一，连接地址、Key、Secret Key、请求头值作为一个密文保存；版本只追加 |
+| `platform_model_price_heads` | `(logical_model_id, operation)` 主键，保存当前价引用和原子版本序列 |
+| `platform_model_prices` | `(logical_model_id, operation, version)` 唯一，正整数固定点数；历史价格不可覆盖 |
+
+平台专用表统一使用 `platform_` 前缀，避开历史本地清理名单。local 入口检测到平台业务表也会拒绝启动，不能通过删除目录标记把平台库变成本地库。
+
+平台迁移 v2 建立资源预留与物理对象计量表，v4 补充预留用途，v6 建立上传摘要收据，v8 建立删除意图、逐对象完成证据和素材身份防复活约束。资源变为 `ready` 和预留转已用在同一 SQLite 事务完成，失败则一并回滚；变为 `failed` 与释放也保持原子。素材删除先在引用保护事务中记录意图，将素材标为 `deleting`、资源标为 `deleted`，普通读取和关联写入均拒绝这些对象。现有 outbox worker 在事务外执行物理删除，每个对象的完成证据持久保存；所有对象完成后，在同一事务删除素材和资源并释放已用容量。任一文件删除失败或最终事务失败均保留元数据与容量，重启重复删除文件按幂等成功继续，不恢复为正常资源。
+
+管理员调低上限不删除数据，已有预留可以完成，新增或扩展预留会被拒绝。分片会话保存工作区、预留身份和内容摘要，平台重启继续未过期会话；未知生成结果的预留不由上传孤儿清理处理。平台适配器只有读取真实持久预留后才提供归属证据，因此零字节未知大小预留可在重启后继续逐块扩展；本地历史 `unattributed` 哨兵仍拒绝自动恢复，不依据大小或总量猜测归属。
+
+平台迁移 v3 增加模型授权、凭据版本与价格版本表。平台仍使用 `model_channels`、`channel_models`、`logical_models`、`logical_model_revisions` 和 `logical_model_routes`；`model_channels` 只保存非敏感元数据，平台凭据不写入其旧密钥字段或请求头字段。已被发布路由引用的渠道模型禁止原地修改，逻辑模型发布新版本使用新的 revision/route ID，防止历史任务引用发生漂移。
+
+平台迁移 v5 建立点数执行意图、请求收据和调整记录，v7 追加人工核对记录。准入事务同时读取有效授权与当前价格、条件增加预留、保存既有任务和收据；任务保存失败全部回滚，事务不联网。`granted_points` 表示发放及调整净额，`settled_points` 表示结算减补偿后的净额，`reserved_points` 表示未终结预留；可用点数为三者之差。完全失败但确认上游消耗时，同事务追加等额结算和补偿，用户净点数不减少。
+
+平台迁移 v9 追加导入收据。离线导入先审计规范 schema v29 的表、字段、迁移名称、唯一工作区、关联和资源文件，再在全新副本迁移并净化；账号、原工作区绑定、初始额度和来源收据同事务创建。目标密钥独立生成，历史执行凭据清除后重新加密，净化后重建数据库并截断 WAL。原始本地渠道保持禁用，历史任务没有平台执行意图，不会由平台领取器恢复。详细支持范围和拒绝条件见[本地工作区隔离导入](./platform-import)。
+
+提交前持久化 `submitting`，重启后不能再次发送同一执行意图。成功至少一份结果结算固定价，结果未知保留预留；超过 24 小时仅标记人工核对。终局重复通知幂等，冲突通知返回 `settlement_conflict`，不能改写历史。账本核对从追加流水和未终结意图重算并报告差异，不自动修改汇总值；累计历史使用任意精度整数，核对结果的计数字段以十进制字符串返回。当前生产生成入口仍关闭，领域账本通过不代表全部模型和工作流已接入。
+
 ## 结构迁移与版本
 
 ### 本地模型配置加密
@@ -36,6 +87,10 @@ v20 `assistant-production-authorization` 为 `assistant_turns` 追加文本列 `
 v21 `skill-market-release-metadata` 为 `skill_versions` 追加 `market_release_json TEXT`，在旧库还没有版本表时先创建该表。市场发布记录的发布身份、作者、来源、许可和完整清单属于具体本地版本，私有改编保留原来源，不改写原包内容摘要。迁移保留历史回合、未知字段和既有 ledger；与公开服务的发布状态分别验收。
 
 v22 `canvas-reusable-workflows` 增加 `canvas_workflows`、`canvas_workflow_runs` 与 `canvas_workflow_resources`。模板保存公开节点定义与加密执行配方；运行保存模板快照、输入、步骤任务回执和输出，删除模板不会删除既有运行。`(user_id, client_operation_id)` 唯一约束防止重复创建同次运行，步骤使用由运行与节点派生的稳定任务操作编号对账。模板固定资源、原配方的外部资源和运行输入输出加入资源删除引用检查。配方整体使用已有工作区密钥加密，接口不返回密文或凭据。
+
+`canvas_workflow_runs.status` 可保存 `paused`；`state_json.reason` 记录 `quota_exceeded`，步骤任务回执、已完成状态和输出保持原值。暂停与继续不增加数据库列或改写历史迁移。恢复只重新排队未执行步骤，依赖现有稳定步骤操作编号对齐已准入任务；已受理任务在暂停期间仍可交付结果。平台已装配文本工作流适配与路由，生产执行保持关闭。
+
+平台迁移 v10 追加 `platform_workflow_requests`，固定同一工作区重试标识与运行的绑定。运行私有 `state_json` 同时保留重试批次、原任务集合及已应用收据，重启时沿用相同子任务标识，避免部分重试成功后重复预留。备份恢复会将非终态工作流隔离为 `failed/backup_recovery_required`，保留已有步骤和输出；不能凭旧备份自动推进或重新提交上游。
 
 v23 `canvas-workflow-source-snapshots` 为任务追加私有文本列 `workflow_source_cipher`。任务成功时，在完整输入被公共投影清理前，将原 canonical 命令整体加密，并与成功结果在同一事务保存；图片后续交付清理保留该列。文本、图片、视频和音频共用此完成路径。快照不进入任务 JSON 或导出，不单独占用素材引用，随任务删除；创建模板时再校验素材可用性并建立引用保护。历史已清理完整参数的任务保留原状，封装时提示手动重新运行，不从模型名或现有连线猜测原请求。
 

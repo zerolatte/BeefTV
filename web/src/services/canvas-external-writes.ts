@@ -1,5 +1,7 @@
 import { apiBaseURL, apiClient, http } from "@/services/api/request";
 import { isDesktopStreamingAvailable, subscribeDesktopBootSnapshot } from "@/services/workspace-startup-state";
+import { captureWorkspaceSession, createWorkspaceSessionRequest, invalidateWorkspaceSession, isWorkspaceSessionCurrent, subscribeWorkspaceSession, type WorkspaceSessionRequestBinding } from "@/services/workspace-session";
+import { getRuntimeMode } from "@/services/workspace-mode";
 
 export type CanvasNodeRef = {
     id: string;
@@ -98,9 +100,15 @@ export function subscribeCanvasEventsStream(projectId: string, onUpdate: () => v
 
     syncTransport();
     const unsubscribeBoot = subscribeDesktopBootSnapshot(syncTransport);
+    const unsubscribeSession = subscribeWorkspaceSession((session) => {
+        activeStop?.();
+        activeStop = null;
+        if (session.identity) syncTransport();
+    });
 
     return () => {
         unsubscribeBoot();
+        unsubscribeSession();
         if (activeStop) {
             activeStop();
             activeStop = null;
@@ -109,10 +117,11 @@ export function subscribeCanvasEventsStream(projectId: string, onUpdate: () => v
 }
 
 function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => void {
+    const session = captureWorkspaceSession();
     const desktopToken = apiClient.defaults.headers.common["X-Desktop-Token"];
     const hasDesktopToken = typeof desktopToken === "string" && desktopToken.trim().length > 0;
 
-    if (window.location.protocol === "http:" && !hasDesktopToken && typeof EventSource !== "undefined") {
+    if (getRuntimeMode() !== "platform" && window.location.protocol === "http:" && !hasDesktopToken && typeof EventSource !== "undefined") {
         const source = new EventSource(`${apiBaseURL.replace(/\/+$/u, "")}/canvas-projects/${encodeURIComponent(projectId)}/events`, { withCredentials: true });
         source.addEventListener("canvas.updated", onUpdate);
         return () => {
@@ -123,17 +132,18 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
 
     if (typeof globalThis.fetch !== "function") return () => {};
     let disposed = false;
-    let controller: AbortController | null = null;
+    let controller: WorkspaceSessionRequestBinding | null = null;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let attempts = 0;
 
     const connect = async () => {
-        if (disposed || !isDesktopStreamingAvailable()) return;
-        controller = new AbortController();
+        if (disposed || !isDesktopStreamingAvailable() || !isWorkspaceSessionCurrent(session)) return;
+        controller = createWorkspaceSessionRequest();
         const currentToken = apiClient.defaults.headers.common["X-Desktop-Token"];
         const base = (apiBaseURL || "/api").replace(/\/+$/, "");
         const url = `${base}/canvas-projects/${encodeURIComponent(projectId)}/events`;
         const headers: Record<string, string> = { Accept: "text/event-stream" };
+        if (session.identity?.mode === "platform" && session.identity.sessionId) headers["X-Platform-Session"] = session.identity.sessionId;
         if (typeof currentToken === "string" && currentToken.trim().length > 0) {
             headers["X-Desktop-Token"] = currentToken;
         }
@@ -145,6 +155,7 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
                 credentials: "include",
             });
             if (response.status === 401 || response.status === 403) {
+                if (response.status === 401 && session.identity?.mode === "platform" && isWorkspaceSessionCurrent(session)) invalidateWorkspaceSession("session_revoked");
                 return;
             }
             if (!response.ok || !response.body) {
@@ -154,7 +165,7 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = "";
-            while (!disposed) {
+            while (!disposed && isWorkspaceSessionCurrent(session)) {
                 const { done, value } = await reader.read();
                 if (done) break;
                 buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
@@ -163,15 +174,17 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
                     const frame = buffer.slice(0, boundary);
                     buffer = buffer.slice(boundary + 2);
                     if (frame.split("\n").some((line) => line.trim() === "event: canvas.updated")) {
-                        onUpdate();
+                        if (isWorkspaceSessionCurrent(session)) onUpdate();
                     }
                     boundary = buffer.indexOf("\n\n");
                 }
             }
         } catch {
             // Reconnect below unless disposed.
+        } finally {
+            controller?.release();
         }
-        if (!disposed && isDesktopStreamingAvailable()) {
+        if (!disposed && isDesktopStreamingAvailable() && isWorkspaceSessionCurrent(session)) {
             const delayMs = 1500 * Math.min(8, 2 ** attempts);
             attempts = Math.min(attempts + 1, 4);
             reconnectTimer = setTimeout(() => {
@@ -186,5 +199,6 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
         disposed = true;
         if (reconnectTimer !== null) clearTimeout(reconnectTimer);
         controller?.abort();
+        controller?.release();
     };
 }

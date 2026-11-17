@@ -22,11 +22,13 @@ func creationTestService(t *testing.T) (*Service, *gorm.DB, string, CreationGuar
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { closeDB(t, db) })
 	if err = db.AutoMigrate(database.LocalModels()...); err != nil {
 		t.Fatal(err)
 	}
 	// Creation approvals protect local model selection and idempotent task admission.
 	s := &Service{repo: repository.New(db), dataDir: t.TempDir(), mode: serviceModeLocal}
+	registerTestServiceCleanup(t, s)
 	capabilityConfig := mustEncodeModelCapabilityConfig(t, DefaultModelCapabilityConfigForModel(string(model.ChannelInterfaceChatCompletion), "text-test"))
 	for _, item := range []any{&model.ModelChannel{ID: "channel", Scope: model.ChannelScopeSystem, Enabled: true, Name: "受控测试"}, &model.ChannelModel{ID: "cm", ChannelID: "channel", ModelKey: "text-test", Capability: "text", Protocol: model.ChannelInterfaceChatCompletion, CapabilityConfigJSON: capabilityConfig, Enabled: true}, &model.ChannelModelVariant{ID: "tier", ChannelModelID: "cm", SelectorKey: "{}", SelectorJSON: "{}", Enabled: true}} {
 		if err = db.Create(item).Error; err != nil {

@@ -56,6 +56,15 @@ func newAssistantTestEnv(t *testing.T, host func(env *assistantTestEnv) http.Han
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("关闭临时库失败: %v", err)
+		}
+	})
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatal(err)
 	}
@@ -64,6 +73,16 @@ func newAssistantTestEnv(t *testing.T, host func(env *assistantTestEnv) http.Han
 	}
 	dataDir := t.TempDir()
 	service := app.NewLocal(repository.New(db), dataDir)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := service.StopWorker(ctx); err != nil {
+			t.Errorf("停止测试后台任务失败: %v", err)
+		}
+		if err := service.Close(); err != nil {
+			t.Errorf("关闭测试服务失败: %v", err)
+		}
+	})
 	owner, err := service.LocalWorkspaceOwner()
 	if err != nil {
 		t.Fatal(err)

@@ -1,4 +1,4 @@
-import { onStorageNamespaceChange } from "@/lib/user-scope";
+import { getActiveUserScope, onStorageNamespaceChange } from "@/lib/user-scope";
 import { captureVideoPoster } from "@/lib/video-poster";
 import { resourceIdFromStorageKey } from "@/services/api/resources";
 import { acquireCanvasVideoSource } from "@/services/canvas-video-source";
@@ -14,7 +14,7 @@ export function canvasDerivedPreviewSourceKey(node: VideoPreviewSource) {
     return JSON.stringify([node.metadata?.storageKey || "", node.metadata?.content || "", node.metadata?.importSource?.provider || ""]);
 }
 
-type PreviewEntry = { refs: number; controller: AbortController; url?: string; promise: Promise<VideoPreview | null> };
+type PreviewEntry = { scope: string; refs: number; controller: AbortController; url?: string; promise: Promise<VideoPreview | null> };
 const previewRequests = new Map<string, PreviewEntry>();
 const posterBlobCache = new Map<string, CachedPoster>();
 const MAX_ACTIVE_PREVIEWS = 32;
@@ -59,11 +59,12 @@ function disposeEntry(key: string, entry: PreviewEntry) {
 /** Display-only leases: never upload a poster or mutate the durable canvas. */
 export function acquireCanvasVideoPreview(node: VideoPreviewSource) {
     const sourceKey = node.metadata?.storageKey || node.metadata?.content || "";
-    const requestKey = canvasDerivedPreviewSourceKey(node);
+    const scope = getActiveUserScope();
+    const requestKey = `${scope}\0${canvasDerivedPreviewSourceKey(node)}`;
     let entry = previewRequests.get(requestKey);
     if (!entry && sourceKey && previewRequests.size < MAX_ACTIVE_PREVIEWS) {
         const controller = new AbortController();
-        const created: PreviewEntry = { refs: 0, controller, promise: Promise.resolve(null) };
+        const created: PreviewEntry = { scope, refs: 0, controller, promise: Promise.resolve(null) };
         const forgetFailedRequest = () => {
             // Existing consumers still own their leases; never remove a newer retry.
             if (previewRequests.get(requestKey) === created) previewRequests.delete(requestKey);
@@ -95,13 +96,18 @@ export function canvasVideoPreviewNeedsHydration(node: VideoPreviewSource) {
 }
 
 export function hasCachedCanvasVideoPreview(node: VideoPreviewSource) {
-    const requestKey = canvasDerivedPreviewSourceKey(node);
+    const requestKey = `${getActiveUserScope()}\0${canvasDerivedPreviewSourceKey(node)}`;
     return posterBlobCache.has(requestKey) || Boolean(previewRequests.get(requestKey)?.url);
 }
 
 export function getCachedCanvasVideoPreviewBlob(node: VideoPreviewSource) {
-    const requestKey = canvasDerivedPreviewSourceKey(node);
+    const requestKey = `${getActiveUserScope()}\0${canvasDerivedPreviewSourceKey(node)}`;
     return posterBlobCache.get(requestKey)?.poster || null;
+}
+
+export function clearCanvasVideoPreviewsForScope(scope: string) {
+    for (const [key, entry] of previewRequests) if (entry.scope === scope) disposeEntry(key, entry);
+    for (const key of posterBlobCache.keys()) if (key.startsWith(`${scope}\0`)) posterBlobCache.delete(key);
 }
 
 async function generateCanvasVideoPreview(node: VideoPreviewSource, requestKey: string, signal?: AbortSignal): Promise<VideoPreview | null> {

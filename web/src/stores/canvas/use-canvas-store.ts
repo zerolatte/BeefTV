@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUserStore } from "@/stores/use-user-store";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
@@ -735,6 +736,25 @@ export function hasActiveCanvasStorePersistence() {
     return canvasStorageTails.size > 0 || canvasSaveTimers.size > 0;
 }
 
+export async function clearCanvasStoreMemoryForScope(scope: string) {
+    clearCanvasSaveTimer(scope);
+    queuedCanvasPersists.delete(scope);
+    await canvasStorageTails.get(scope);
+    canvasStorageTails.delete(scope);
+    canvasMemoryStates.delete(scope);
+    observedCanvasPersists.delete(scope);
+    canvasPersistTokens.delete(scope);
+    for (const key of canvasDocumentBases.keys()) if (key.startsWith(`${scope}\0`)) canvasDocumentBases.delete(key);
+    for (const key of pendingCanvasGenerationAttempts.keys()) if (key.startsWith(`${scope}\0`)) pendingCanvasGenerationAttempts.delete(key);
+    for (const key of canvasExternalRevisionState.conflicts.keys()) {
+        if (key.startsWith(`${scope}\0`)) canvasExternalRevisionState.conflicts.delete(key);
+    }
+    if (getActiveUserScope() === scope) {
+        withCanvasStorePersistenceSuppressed(() => useCanvasStore.setState({ projects: [], folders: [], hydrated: false }));
+        canvasMemoryStates.delete(scope);
+    }
+}
+
 export const useCanvasStore = create<CanvasStore>()(
     persist(
         (set, get) => ({
@@ -859,6 +879,7 @@ export const useCanvasStore = create<CanvasStore>()(
         }),
         {
             name: CANVAS_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: canvasStorage,
             merge: (persisted, current) => {
                 const persistedState = (persisted ?? {}) as Partial<CanvasStore>;

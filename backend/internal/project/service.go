@@ -64,10 +64,10 @@ func mapProjectWriteError(err error) error {
 		return nil
 	}
 	if errors.Is(err, repository.ErrProjectRevisionConflict) {
-		return kernel.WrapAppError(kernel.CodeConflict, "项目已被其他操作更新，请重新加载后再保存", err)
+		return &kernel.AppError{Status: kernel.CodeConflict, Code: kernel.CodeConflict, Reason: "revision_conflict", Message: "项目已被其他操作更新，草稿已保留，请重新加载后核对", Cause: err}
 	}
 	if errors.Is(err, repository.ErrExpectedRevisionRequired) {
-		return kernel.BadAuthRequest("请刷新后再保存分镜")
+		return &kernel.AppError{Status: kernel.CodeInvalidArgument, Code: kernel.CodeInvalidArgument, Reason: "expected_revision_required", Message: "必须提供有效的预期项目版本，请重新加载后保存", Cause: err}
 	}
 	if errors.Is(err, repository.ErrCanvasRevisionConflict) {
 		return kernel.WrapAppError(kernel.CodeConflict, "画布已被其他操作更新，无法完成项目关联", err)
@@ -202,11 +202,11 @@ func (s *Service) CreateProjectFolder(userID string, req CreateProjectFolderRequ
 	return folder, nil
 }
 
-func (s *Service) MoveProjectToFolder(userID, projectID, folderID string) error {
+func (s *Service) MoveProjectToFolder(userID, projectID, folderID string, expectedRevision int64) error {
 	if _, err := s.Owned(userID, projectID); err != nil {
 		return err
 	}
-	return mapProjectWriteError(s.repo.MoveProjectAndBump(userID, projectID, strings.TrimSpace(folderID)))
+	return mapProjectWriteError(s.repo.MoveProjectAndBump(userID, projectID, strings.TrimSpace(folderID), expectedRevision))
 }
 
 func (s *Service) DuplicateProject(userID, projectID string) (model.Project, error) {
@@ -294,6 +294,9 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 	if err != nil {
 		return model.Project{}, err
 	}
+	if err := requireExpectedRevision(req.ExpectedRevision, item.Revision); err != nil {
+		return model.Project{}, err
+	}
 	if name := strings.TrimSpace(req.Name); name != "" {
 		item.Name = name
 	}
@@ -314,9 +317,6 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 		if coverResourceID != "" {
 			resource, resourceErr := s.repo.ResourceForUser(userID, coverResourceID)
 			if resourceErr != nil {
-				if errors.Is(resourceErr, gorm.ErrRecordNotFound) {
-					return model.Project{}, kernel.BadAuthRequest("项目主图不存在或不属于当前用户")
-				}
 				return model.Project{}, resourceErr
 			}
 			if resource.Status != model.ResourceStatusReady || resource.Kind != "image" {
@@ -358,13 +358,23 @@ func (s *Service) UpdateProject(userID string, id string, req UpdateProjectReque
 		}
 		item.Status = status
 	}
-	expectedRevision := item.Revision
+	expectedRevision := req.ExpectedRevision
 	item.Revision = expectedRevision + 1
 	item.UpdatedAt = time.Now()
 	if err := s.repo.UpdateProjectCAS(userID, expectedRevision, item); err != nil {
 		return model.Project{}, mapProjectWriteError(err)
 	}
 	return *item, nil
+}
+
+func requireExpectedRevision(expected, current int64) error {
+	if expected < 1 {
+		return mapProjectWriteError(repository.ErrExpectedRevisionRequired)
+	}
+	if expected != current {
+		return mapProjectWriteError(repository.ErrProjectRevisionConflict)
+	}
+	return nil
 }
 
 func normalizeProjectDefaultModel(value string) (string, error) {

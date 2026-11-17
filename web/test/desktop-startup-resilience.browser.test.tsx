@@ -11,7 +11,10 @@ let server: ReturnType<typeof Bun.serve>;
 
 beforeAll(async () => {
     const stubs: Record<string, string> = {
-        "@/stores/use-user-store": 'import { create } from "zustand"; export const useUserStore = create(set => ({ hydrated: false, storageMode: "local", user: null, setUser: user => set({ user }), setHydrated: hydrated => set({ hydrated }) }));',
+        "@/stores/use-user-store": 'import { create } from "zustand"; export const useUserStore = create(set => ({ runtimeMode: "local", hydrated: false, storageMode: "local", user: null, setUser: user => set({ user }), setHydrated: hydrated => set({ hydrated }) }));',
+        "@/services/workspace-mode": 'export const getRuntimeMode = () => "local"; export const setRuntimeMode = () => {}; export const isLocalWorkspaceMode = () => true; export const workspaceCapabilities = () => ({local: true, localAssets: true, providerCalls: true});',
+        "@/services/api/platform-auth": 'export const getRuntimeModeContract = async () => ({ mode: "local", contractVersion: 1 });',
+        "@/components/platform/platform-auth-gate": 'export function PlatformAuthGate() { throw new Error("桌面测试不应进入平台认证"); }',
         "@/stores/use-config-store": 'import { create } from "zustand"; export const createModelChannel = () => ({}); export const isSystemProxyBaseUrl = () => false; export const MANAGED_BEEFTV_CREDENTIAL_REF = ""; export const useConfigStore = create(set => ({ config: { channels: [{ id: "ch-1" }] }, updateConfig: () => {}, replaceConfig: config => set({ config }) })); export const normalizeConfigSnapshot = value => value;',
         "@/stores/use-asset-store": 'import { create } from "zustand"; export const useAssetStore = Object.assign(create(() => ({ hydrated: true, cleanupImages: async () => {} })), { persist: { hasHydrated: () => true, onFinishHydration: () => () => {} } });',
         "@/stores/use-plugin-store": 'import { create } from "zustand"; export const usePluginStore = create(() => ({ hydrated: true, installations: [], setRuntimeStatuses: () => {}, setPluginStates: () => {} }));',

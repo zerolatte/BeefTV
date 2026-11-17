@@ -25,10 +25,10 @@ test("workspace capabilities expose only the local runtime contract", () => {
     });
 });
 
-test("workspace capabilities use safe local defaults before bootstrap", () => {
+test("启动前不开放尚未确认的能力", () => {
     expect(workspaceCapabilities()).toEqual({
-        local: true,
-        localAssets: true,
-        providerCalls: true,
+        local: false,
+        localAssets: false,
+        providerCalls: false,
     });
 });

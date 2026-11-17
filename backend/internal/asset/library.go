@@ -104,6 +104,9 @@ func (l *Library) UserAssetsByIDs(userID string, ids []string) ([]json.RawMessag
 	if err != nil {
 		return nil, err
 	}
+	if len(assets) != len(unique) {
+		return nil, kernel.NotFound("素材不存在")
+	}
 	return clientPayloads(assets), nil
 }
 

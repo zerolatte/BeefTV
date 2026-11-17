@@ -1,0 +1,101 @@
+.platform-admin-page {
+    color: var(--user-ink);
+    font-size: 14px;
+    line-height: 22px;
+}
+
+.platform-admin-page .platform-admin-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-block: 12px;
+}
+
+.platform-admin-page .platform-admin-tabs [aria-pressed="true"] {
+    color: var(--user-ink);
+    background: var(--user-surface-hover);
+    border-color: var(--user-border);
+}
+
+.platform-admin-dialog {
+    color: var(--user-ink);
+    font-size: 14px;
+    line-height: 22px;
+    overflow-wrap: anywhere;
+}
+
+.platform-admin-dialog .platform-admin-account-label {
+    margin-bottom: 16px;
+    color: var(--user-ink-muted);
+}
+
+.platform-admin-dialog .platform-admin-number {
+    width: 100%;
+}
+
+.platform-admin-dialog .platform-admin-field-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.platform-admin-dialog .platform-admin-header-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+}
+
+.platform-admin-dialog .platform-admin-grant-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.platform-admin-dialog .platform-admin-reconciliation {
+    display: grid;
+    gap: 12px;
+    margin-block: 16px;
+}
+
+.platform-admin-dialog .platform-admin-reconciliation > button {
+    justify-self: start;
+}
+
+.platform-admin-dialog .platform-admin-review-facts {
+    display: grid;
+    gap: 12px;
+}
+
+@media (max-width: 520px) {
+    .platform-admin-dialog .platform-admin-field-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+}
+
+.platform-admin-dialog .ant-form-item-extra {
+    color: var(--user-ink-muted);
+}
+
+.platform-admin-dialog .platform-admin-error {
+    margin-bottom: 16px;
+    color: var(--palette-status-error);
+}
+
+.platform-admin-dialog .platform-admin-quota {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 20px;
+    font-variant-numeric: tabular-nums;
+}
+
+.platform-admin-dialog .platform-admin-quota > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.platform-admin-dialog .platform-admin-quota dt {
+    color: var(--user-ink-muted);
+}

@@ -25,6 +25,9 @@ func (s *Service) validateCanvasMediaAssetsWithCandidates(userID string, raw jso
 }
 
 func (s *Service) validateCanvasMediaAssetsWithBaseline(userID string, raw json.RawMessage, existing *model.CanvasProject, candidates []model.Asset) error {
+	if err := s.validateCanvasResourceOwnership(userID, raw, existing); err != nil {
+		return err
+	}
 	references, err := MediaAssetReferences(raw)
 	if err != nil {
 		return kernel.BadAuthRequest("画布媒体数据格式错误")
@@ -84,22 +87,61 @@ func (s *Service) validateCanvasMediaAssetsWithBaseline(userID string, raw json.
 		return err
 	}
 	readyResources := make(map[string]struct{}, len(resources))
+	ownedResourceIDs := make(map[string]struct{}, len(resources))
 	for _, resource := range resources {
+		ownedResourceIDs[resource.ID] = struct{}{}
 		if resource.Status == model.ResourceStatusReady {
 			readyResources[resource.ID] = struct{}{}
 		}
 	}
 
 	for _, reference := range references {
+		if _, exists := ownedResourceIDs[reference.ResourceID]; !exists {
+			return kernel.NotFound("画布媒体对应的资源不存在")
+		}
 		if _, exists := readyResources[reference.ResourceID]; !exists {
 			return kernel.BadAuthRequest("画布媒体对应的资源不存在或尚未就绪，请重新上传")
 		}
 		resourceIDs, assetExists := assetResources[reference.AssetID]
 		if !assetExists {
-			return kernel.BadAuthRequest("画布媒体尚未进入素材库，请等待同步完成后重试")
+			return kernel.NotFound("画布媒体对应的素材不存在")
 		}
 		if _, matches := resourceIDs[reference.ResourceID]; !matches {
 			return kernel.BadAuthRequest("画布媒体与素材库记录不一致，请重新同步")
+		}
+	}
+	return nil
+}
+
+// 除主媒体外，封面、预览和节点元数据里的新增资源引用也必须属于当前工作区。
+// 已保存的历史失效引用允许保留，避免普通文字编辑被旧缺失资源阻断。
+func (s *Service) validateCanvasResourceOwnership(userID string, raw json.RawMessage, existing *model.CanvasProject) error {
+	ids := map[string]struct{}{}
+	if err := assets.CollectOwnedDocumentReferences(string(raw), ids); err != nil {
+		return kernel.BadAuthRequest("画布资源数据格式错误")
+	}
+	if existing != nil {
+		baseline := map[string]struct{}{}
+		if err := assets.CollectOwnedDocumentReferences(existing.PayloadJSON, baseline); err != nil {
+			return err
+		}
+		for id := range baseline {
+			delete(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	resources, err := s.repo.ResourcesForUserIDs(userID, assets.SortedIDs(ids))
+	if err != nil {
+		return err
+	}
+	if len(resources) != len(ids) {
+		return kernel.NotFound("画布引用的资源不存在")
+	}
+	for _, resource := range resources {
+		if resource.Status != model.ResourceStatusReady {
+			return kernel.BadAuthRequest("画布引用的资源尚未就绪")
 		}
 	}
 	return nil

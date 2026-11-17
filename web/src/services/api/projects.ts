@@ -250,6 +250,8 @@ export type ProjectListPage = {
 
 export type ProjectDetail = {
     project: Project;
+    unitProjectRevision?: number;
+    unitListProjectRevision?: number;
     units: ProjectUnit[];
     canvases: ProjectCanvas[];
     canvasUnitLinks: CanvasUnitLink[];
@@ -295,6 +297,7 @@ export type ProjectOverview = { metrics: ProjectOverviewMetrics; units: ProjectO
 
 export type ProjectUnitWorkspace = {
     unit: ProjectUnit;
+    projectRevision: number;
     workflows: ProjectWorkflow[];
     shots: ProjectShot[];
     shotRevisions: ShotRevision[];
@@ -341,7 +344,7 @@ export function listProjects(params?: { page: number; pageSize: number }) {
 export function listProjectFolders() { return http.get<{ folders: ProjectFolder[] }>("/project-folders"); }
 export function createProjectFolder(input: { name: string; parentId?: string }) { return http.post<{ folder: ProjectFolder }>("/project-folders", input); }
 export function duplicateProject(projectId: string) { return http.post<{ project: Project }>(`/projects/${encodeURIComponent(projectId)}/duplicate`, {}); }
-export function moveProjectToFolder(projectId: string, folderId: string) { return http.patch<{ id: string; folderId: string }>(`/projects/${encodeURIComponent(projectId)}/folder`, { folderId }); }
+export function moveProjectToFolder(projectId: string, folderId: string, expectedRevision: number) { return http.patch<{ id: string; folderId: string }>(`/projects/${encodeURIComponent(projectId)}/folder`, { folderId, expectedRevision }); }
 
 export function getProject(id: string) {
     return http.get<ProjectDetail>(`/projects/${encodeURIComponent(id)}`).then(normalizeProjectDetail);
@@ -352,7 +355,7 @@ export function getProjectCore(id: string) {
 }
 
 export function listProjectUnits(projectId: string) {
-    return http.get<{ units: ProjectUnit[]; canvasCounts: Record<string, number> }>(`/projects/${encodeURIComponent(projectId)}/units`);
+    return http.get<{ units: ProjectUnit[]; canvasCounts: Record<string, number>; projectRevision: number }>(`/projects/${encodeURIComponent(projectId)}/units`);
 }
 
 export function getProjectOverview(projectId: string) {
@@ -443,8 +446,8 @@ export function createProject(input: { name: string; type: string; aspectRatio: 
     return http.post<{ project: Project }>("/projects", input);
 }
 
-export function updateProject(projectId: string, input: Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "coverResourceId" | "stylePresetId" | "styleProfileJson" | "defaultImageModel" | "defaultVideoModel" | "status">>) {
-    return http.patch<{ project: Project }>(`/projects/${encodeURIComponent(projectId)}`, input);
+export function updateProject(projectId: string, input: { expectedRevision: number } & Partial<Pick<Project, "name" | "type" | "aspectRatio" | "sourceType" | "description" | "coverResourceId" | "stylePresetId" | "styleProfileJson" | "defaultImageModel" | "defaultVideoModel" | "status">>, signal?: AbortSignal) {
+    return http.patch<{ project: Project }>(`/projects/${encodeURIComponent(projectId)}`, input, { signal });
 }
 
 export function deleteProject(projectId: string) {
@@ -456,19 +459,19 @@ export function createProjectUnit(projectId: string, input: { kind: string; titl
 }
 
 export function getProjectUnit(projectId: string, unitId: string, signal?: AbortSignal) {
-    return http.get<{ unit: ProjectUnit }>(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`, { signal });
+    return http.get<{ unit: ProjectUnit; projectRevision: number }>(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`, { signal });
 }
 
 export function importProjectUnits(projectId: string, units: Array<{ kind: string; title: string; sourceText?: string }>) {
     return http.post<{ units: ProjectUnit[] }>(`/projects/${encodeURIComponent(projectId)}/units/import`, { units });
 }
 
-export function reorderProjectUnits(projectId: string, unitIds: string[]) {
-    return http.patch<{ unitIds: string[] }>(`/projects/${encodeURIComponent(projectId)}/units/reorder`, { unitIds });
+export function reorderProjectUnits(projectId: string, unitIds: string[], expectedRevision: number) {
+    return http.patch<{ unitIds: string[] }>(`/projects/${encodeURIComponent(projectId)}/units/reorder`, { unitIds, expectedRevision });
 }
 
-export function updateProjectUnit(projectId: string, unitId: string, input: { title?: string; sourceText: string; status?: ProjectUnit["status"] }) {
-    return http.patch<{ unit: ProjectUnit }>(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`, input);
+export function updateProjectUnit(projectId: string, unitId: string, input: { expectedRevision: number; title?: string; sourceText: string; status?: ProjectUnit["status"] }, signal?: AbortSignal) {
+    return http.patch<{ unit: ProjectUnit; projectRevision: number }>(`/projects/${encodeURIComponent(projectId)}/units/${encodeURIComponent(unitId)}`, input, { signal });
 }
 
 export function deleteProjectUnit(projectId: string, unitId: string) {

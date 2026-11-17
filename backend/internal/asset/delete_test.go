@@ -445,6 +445,15 @@ func TestDeleteAndAdmissionDoNotDropQueuedTaskMaterial(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("关闭并发测试库失败: %v", err)
+		}
+	})
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatal(err)
 	}
@@ -637,6 +646,11 @@ func TestDeleteAssetAndResourcesConcurrentRestoreKeepsActiveAsset(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatal(err)
 	}

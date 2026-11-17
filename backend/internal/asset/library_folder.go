@@ -74,7 +74,7 @@ func (l *Library) UpdateAssetFolder(userID string, folderID string, req UpdateAs
 			item, loadErr := tx.AssetFolderForUser(userID, folderID)
 			if loadErr != nil {
 				if isNotFound(loadErr) {
-					return kernel.BadAuthRequest("素材分类不存在")
+					return kernel.NotFound("素材分类不存在")
 				}
 				return loadErr
 			}
@@ -90,7 +90,7 @@ func (l *Library) UpdateAssetFolder(userID string, folderID string, req UpdateAs
 			item.UpdatedAt = time.Now().UTC()
 			if err := tx.UpdateAssetFolder(item); err != nil {
 				if isNotFound(err) {
-					return kernel.BadAuthRequest("素材分类不存在")
+					return kernel.NotFound("素材分类不存在")
 				}
 				if isAssetFolderNameConflict(err) {
 					return kernel.BadAuthRequest("已存在同名素材分类")
@@ -114,7 +114,7 @@ func (l *Library) DeleteAssetFolder(userID string, folderID string) error {
 	return l.host.WithStorageLock(func() error {
 		err := l.repo.DeleteAssetFolder(userID, strings.TrimSpace(folderID))
 		if isNotFound(err) {
-			return kernel.BadAuthRequest("素材分类不存在")
+			return kernel.NotFound("素材分类不存在")
 		}
 		if errors.Is(err, repository.ErrAssetFolderAssignmentConflict) {
 			return kernel.NewAppError(http.StatusConflict, "素材已被其他操作更新，请重试")
@@ -140,7 +140,7 @@ func (l *Library) MoveUserAssetsToFolder(userID string, req MoveUserAssetsReques
 			if folderID != "" {
 				if _, err := tx.AssetFolderForUser(userID, folderID); err != nil {
 					if isNotFound(err) {
-						return kernel.BadAuthRequest("目标素材分类不存在")
+						return kernel.NotFound("目标素材分类不存在")
 					}
 					return err
 				}
@@ -150,7 +150,7 @@ func (l *Library) MoveUserAssetsToFolder(userID string, req MoveUserAssetsReques
 				return err
 			}
 			if len(assets) != len(ids) {
-				return kernel.BadAuthRequest("部分素材不存在或不属于当前用户")
+				return kernel.NotFound("素材不存在")
 			}
 			now := time.Now().UTC()
 			for index := range assets {
@@ -180,7 +180,7 @@ func assignAssetFolder(tx *repository.Repository, userID string, item model.Asse
 		fresh, loadErr := tx.AssetForUser(userID, current.ID)
 		if loadErr != nil {
 			if isNotFound(loadErr) {
-				return kernel.BadAuthRequest("部分素材不存在或不属于当前用户")
+				return kernel.NotFound("素材不存在")
 			}
 			return loadErr
 		}

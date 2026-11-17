@@ -1,5 +1,6 @@
 import { http } from "./request";
 import type { GenerationTask } from "./task-center";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 export type SmartEraseType = "subtitle" | "watermark" | "privacy";
 export type SubtitleEraseMethod = "auto" | "custom";
@@ -403,6 +404,7 @@ export const estimateVideoSubtitleErase = (params: SubtitleEraseParams, signal?:
     });
 
 export function createVideoSubtitleEraseTask(params: SubtitleEraseParams & { clientOperationId: string; projectId: string; nodeId: string }) {
+    assertGenerationAvailable();
     return http.post<GenerationTask>("/video-subtitle-erase/tasks", params, { timeout: SUBTITLE_ERASE_CREATE_TIMEOUT_MS }).then((task) => {
         if (typeof window !== "undefined") {
             window.dispatchEvent(new CustomEvent("canvas:task-created", { detail: { task } }));

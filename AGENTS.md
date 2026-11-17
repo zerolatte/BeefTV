@@ -11,10 +11,10 @@ BeefTV（`glanderness/BeefTV`）是面向 AI 影视与短剧创作的工作台�
 | 单元 | 技术栈 | 入口 | 责任 |
 | --- | --- | --- | --- |
 | `web/` | Vite、React 19、TypeScript、React Router、Ant Design、Tailwind、Zustand、TanStack Query | `web/src/application.tsx`、`web/src/router.tsx` | 工作区 UI、画布交互、浏览器缓存、API 调用和模型协议适配 |
-| `backend/` | Go 1.26、Gin、GORM、SQLite | `backend/cmd/desktop`、`backend/cmd/server` | 本地工作区 API、持久化任务、资源和外部模型协议适配 |
+| `backend/` | Go 1.26、Gin、GORM、SQLite | `backend/cmd/desktop`、`backend/cmd/server`、`backend/cmd/platform` | local 工作区和分阶段开发中的 platform 运行时 |
 | `docs/` | Next.js、Fumadocs、MDX | `docs/content/docs/` | 面向用户和开发者的专题文档；构建配置见 `docs/source.config.ts` |
 
-根目录脚本负责 Wails 与本地开发验证。主线不依赖 PostgreSQL、Redis、登录或多租户部署。
+根目录脚本负责 Wails 与本地开发验证。local 主线不依赖 PostgreSQL、Redis、登录或多租户部署；`cmd/platform` 使用独立组合根和 `platform` 构建标签，平台功能按阶段交付。阶段边界见 `docs/content/docs/backend/platform-mode.mdx`，不得把未交付阶段写成已有产品能力。
 
 ## 2. 开始工作前
 
@@ -85,7 +85,8 @@ BeefTV（`glanderness/BeefTV`）是面向 AI 影视与短剧创作的工作台�
 ### 数据、缓存和写路径
 
 - 画布、项目、任务、素材和大 JSON 使用按工作区命名空间区分的 `localforage`；`localStorage` 只保存小型配置、当前命名空间或 UI 偏好。命名空间（`getActiveUserScope` / `scopedStorageKey`）只用于区分本地存储，改动会让用户读不到已有数据。
-- BeefTV 不管账号：每个后端进程只服务一个本地工作区，运行中不会切换。账号、登录、钱包、余额和扣费归服务端 API；BeefTV 只记当前服务端连接，切换连接时刷新模型能力目录。不要为"异步操作期间切换账号"加保护或测试；异步写回只需核对画布、项目、节点是否仍是原目标。
+- local 模式不管账号：每个 local 后端进程只服务一个本地工作区，运行中不会切换。账号、登录、钱包、余额和扣费归服务端 API；local 只记当前服务端连接，切换连接时刷新模型能力目录。local 异步写回只需核对画布、项目、节点是否仍是原目标。
+- platform 模式使用 `identity.Principal` 的 `mode/accountId/workspaceId/role/status/sessionId`；业务 `user_id` 保存工作区 ID，账号管理和审计使用账号 ID。禁止默认工作区兜底，管理员业务内容同样限定自己的工作区。平台异步操作必须绑定账号、工作区和会话代次，切换或撤销后不得写回旧结果。
 - 任务状态与可操作动作（重试、继续取回、失败原因）只认后端 `task.outcome`（`phase`、`regenerate`、`reason`），前端不自行拼凑覆盖。重新生成节点即使保留上一次成功媒体，只要最新任务处于可继续取回态，仍按最新 `task.outcome` 展示继续取回；继续取回只恢复原 `taskId` 轮询与结果入库，不重复发起上游扣费提交。
 - 任务本地权威输出字段（如 `task.outputs[].resourceId`、`storageKey`、`mimeType`）必须在统一解析入口（`parseBackendGenerationResult`）合并进媒体条目，确保生成历史预览、节点回填与插入画布读取同一套媒体源，不在局部按钮分支打补丁。
 - 后端不可用时的本地缓存是降级，不代表服务端已保存。UI 必须区分“本地缓存成功”和“服务端持久化成功”。
@@ -133,6 +134,9 @@ BeefTV（`glanderness/BeefTV`）是面向 AI 影视与短剧创作的工作台�
 - 新增技能信息时先接入详情视图。交付前检查三个子页面的列表，确认名称区没有附加说明，且详情入口能够读取完整信息。
 
 ## 7. 本地开发、部署和数据目录
+
+- `cmd/desktop` 与既有 `cmd/server` 保持 local；平台只用带 `platform` 构建标签的 `cmd/platform`。平台目录、数据库、主密钥及模式标记必须与 local 分离；在任何业务迁移之前执行目录/数据库双标记校验，禁止借助启动参数绕过。平台使用单实例 SQLite，不开放本地 owner、桌面或 Agent 凭据。
+- 平台按阶段装配精确路由允许清单。当前 P1a 只接入认证、项目/章节、画布/画板和风格档案；用户管理 UI、资源配额执行、模型授权、任务计点/生成、平台前端会话生命周期及导入仍未交付。真实生成在 P4 验收前保持关闭，开发只使用模拟上游。
 
 - 先阅读 `.env.example` 和对应 Compose 文件。宿主机后端开发必须使用 Git 忽略的 `.local/project-workbench-debug`，通过 `CANVAS_BACKEND_DATA_DIR` 显式指定；不要把 `backend/data` 当作开发账号数据库。
 - 本地缓存放 `.local/cache`；不要提交数据库、上传文件、`.env`、真实密钥、构建产物或编辑器配置。

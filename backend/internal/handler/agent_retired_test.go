@@ -2,12 +2,14 @@ package handler
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"infinite-canvas/backend/internal/app"
 	"infinite-canvas/backend/internal/database"
@@ -39,6 +41,15 @@ func newRetiredAgentHarness(t *testing.T) retiredAgentHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("关闭临时库失败: %v", err)
+		}
+	})
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatal(err)
 	}
@@ -48,6 +59,16 @@ func newRetiredAgentHarness(t *testing.T) retiredAgentHarness {
 	}
 	dir := t.TempDir()
 	svc := app.NewLocal(repository.New(db), dir)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := svc.StopWorker(ctx); err != nil {
+			t.Errorf("停止测试后台任务失败: %v", err)
+		}
+		if err := svc.Close(); err != nil {
+			t.Errorf("关闭测试服务失败: %v", err)
+		}
+	})
 	router := gin.New()
 	router.Use(WorkspaceMiddleware(workspace.Context{ID: "local", DataDir: dir}))
 	RegisterDesktopCanvasAPIWithDependencies(router.Group("/api"), svc, defaultRuntimeDependencies(svc))

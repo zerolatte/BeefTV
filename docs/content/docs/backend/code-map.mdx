@@ -1,10 +1,10 @@
 ---
-title: 本地后端代码地图
+title: 后端代码地图
 ---
 
-# 本地后端代码地图
+# 后端代码地图
 
-BeefTV 是单用户、本地优先的桌面应用。项目、画布、素材和任务落到本地 SQLite 与工作区目录；模型生成仍可通过 Provider/Protocol 适配器访问外部 API。旧内置 Agent 已从产品运行面退场，其历史运行/偏好/记忆数据仍保留在本地数据库。
+BeefTV 的 local 模式是单用户、本地优先的桌面应用。项目、画布、素材和任务落到本地 SQLite 与工作区目录；模型生成仍可通过 Provider/Protocol 适配器访问外部 API。platform 使用独立入口、账号会话和工作区绑定，仍按阶段开发；具体交付边界见 [平台模式](/docs/backend/platform-mode)。旧内置 Agent 已从产品运行面退场，其历史运行/偏好/记忆数据仍保留在本地数据库。
 
 ## 运行链路
 
@@ -25,6 +25,13 @@ Wails / local dev
 | 边界 | 位置 | 职责 |
 | --- | --- | --- |
 | 组合根 | `backend/internal/bootstrap` | 打开本地数据、组合窄服务、启停 HTTP 与 worker |
+| 平台组合根与身份 | `backend/cmd/platform`、`internal/platformboot`、`internal/platformauth` | 独立目录、一次性引导、账号会话、CSRF、撤销和管理员生命周期；实现使用 platform 构建标签 |
+| 平台存储 | `backend/internal/platformstorage` | 持久容量预留、资源状态与计量原子终结；复用 asset 保存与恢复流程 |
+| 平台点数 | `backend/internal/platformquota` | 执行意图、同事务任务准入、幂等收据、结算/释放/补偿、管理员调整与核对；不实现上游执行循环 |
+| 平台文本任务 | `backend/internal/platformtask` | 平台身份和账本适配到既有 task、taskruntime、generation 与文本 SSE；正式构造器保持生成关闭 |
+| 平台工作流 | `backend/internal/platformworkflow` | 文本模板与运行路由、永久工作区绑定和步骤准入；复用 canvasworkflow 调度器，真实执行保持关闭 |
+| 平台备份 | `backend/internal/platformbackup` | 迁移前完整快照、逐文件摘要与双端标记校验、向全新目录恢复；不打开本地导入入口 |
+| 本地隔离导入 | `backend/internal/platformimport` | 停写锁、规范 v29 归属审计、独立密钥重加密、容量登记和禁止覆盖的原子交付；未支持历史拒绝导入 |
 | 桌面宿主与实例锁 | `backend/cmd/desktop`、`backend/internal/runtimeinfo` | 非阻塞桌面启动状态机（`StartupState` / `RetryStartup`）、进程创建时间级实例锁核验、窗口内 `/api/*` 同源回退代理、WebView2 本机回环直连与启动失败离线诊断导出 |
 | 本地应用 | `backend/internal/localapp` | 定义 workspace/project/asset/task/generation/provider-config 端口（旧 Agent 空端口已移除） |
 | 工作区 | `backend/internal/workspace` | 本地身份、模型配置快照；ZIP 导入导出不在此包 |
@@ -55,7 +62,7 @@ Wails / local dev
 
 ## 硬边界
 
-- 不提供登录、注册、计费、支付、公开分享或云存储路由。
+- local 不提供平台账号、登录或计费路由。platform 账号仅由管理员创建，不提供公开注册、支付或周期额度。
 - BeefTV 官方算力密钥保存在本机加密连接存储中；其他手动渠道密钥仍在本地模型配置中。密钥不进入画布快照或日志响应。
 - 外部 API 是生成能力，不是 SaaS 数据面；不得在“本地化清理”中删除 Provider、Protocol、自定义渠道或插件扩展点。
 - worker 并发策略由任务运行时管理，架构整理不得顺带改变其行为。

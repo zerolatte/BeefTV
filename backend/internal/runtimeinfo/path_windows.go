@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"infinite-canvas/backend/internal/desktopstorage"
 )
 
 func descriptorLocation(dataDir string) (string, string, error) {
@@ -17,6 +19,10 @@ func descriptorLocation(dataDir string) (string, string, error) {
 	abs, err := filepath.Abs(dataDir)
 	if err != nil {
 		return "", "", fmt.Errorf("定位工作区数据目录: %w", err)
+	}
+	abs, err = desktopstorage.CanonicalDirectory(abs)
+	if err != nil {
+		return "", "", fmt.Errorf("解析工作区目录身份: %w", err)
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

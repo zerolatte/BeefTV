@@ -3,13 +3,20 @@ import { Select } from "antd";
 
 import { listAddedSkills, type Skill } from "@/services/api/skills";
 import { SKILL_RUNTIME_PROFILES, type SkillRuntimeProfile } from "@/services/skill-runtime";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function useSkillRuntimeCatalog() {
+    const features = useUserStore((state) => state.features);
+    const mode = useUserStore((state) => state.runtimeMode);
+    const enabled = isWorkspaceFeatureEnabled("skillsEnabled", features, mode === "local");
     const [skills, setSkills] = useState<Skill[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!enabled) { setSkills([]); setLoading(false); return; }
         let cancelled = false;
+        setLoading(true);
         listAddedSkills()
             .then((result) => {
                 if (!cancelled) setSkills(result.skills.filter((skill) => skill.isAdded));
@@ -23,7 +30,7 @@ export function useSkillRuntimeCatalog() {
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [enabled]);
 
     return { skills, loading };
 }

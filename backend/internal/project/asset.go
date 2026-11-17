@@ -291,9 +291,6 @@ func (s *Service) CreateProjectAssetVersion(userID string, projectID string, ass
 	version := model.AssetVersion{ID: kernel.NewID(), AssetID: assetID, Status: model.AssetVersionStatusDraft, DefinitionJSON: definition, Prompt: strings.TrimSpace(req.Prompt), Note: strings.TrimSpace(req.Note), CreatedAt: now, UpdatedAt: now}
 	asset.UpdatedAt = now
 	if err := s.repo.CreateProjectAssetVersionAndBump(userID, projectID, asset, &version); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return model.AssetVersion{}, kernel.BadAuthRequest("素材尚未加入当前项目")
-		}
 		return model.AssetVersion{}, mapProjectWriteError(err)
 	}
 	return version, nil

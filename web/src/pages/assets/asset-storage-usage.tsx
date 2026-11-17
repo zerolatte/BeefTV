@@ -2,16 +2,13 @@ import { HardDrive } from "lucide-react";
 
 import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usage";
 import { accountFileStorageUsageQueryKey, accountStorageMeter, formatStorageBytes } from "@/lib/account-storage-usage";
-import { useUserStore } from "@/stores/use-user-store";
 import { isLocalWorkspaceMode } from "@/services/workspace-mode";
 
 export const assetStorageUsageQueryKey = accountFileStorageUsageQueryKey;
 
 export function AssetStorageUsage() {
     const query = useAccountFileStorageUsage();
-    const storageMode = useUserStore((state) => state.storageMode);
-    const user = useUserStore((state) => state.user);
-    const localMode = isLocalWorkspaceMode() || storageMode === "local" || user?.username === "local";
+    const localMode = isLocalWorkspaceMode();
     const usage = query.data;
     const meter = accountStorageMeter(usage);
 

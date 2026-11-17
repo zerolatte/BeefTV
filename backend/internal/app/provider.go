@@ -2,14 +2,12 @@ package app
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 
 	"infinite-canvas/backend/internal/generation"
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/modelcatalog"
+	localtask "infinite-canvas/backend/internal/task"
 )
 
 type providerAnalyticsKey = generation.AnalyticsKey
@@ -59,24 +57,16 @@ func providerPayloadErrorMessage(raw string) string {
 
 func (s *Service) processCanvasGenerationTask(ctx context.Context, userID string, taskProjectID string, taskType string, fallbackPrompt string, rawInput string) (map[string]interface{}, error) {
 	ctx = withProtocolRegistry(ctx, s.protocolRegistry())
-	var input canvasGenerationInput
-	defer func() { recordTaskDiagnosticInput(ctx, input) }()
-	if err := json.Unmarshal([]byte(rawInput), &input); err != nil {
-		return nil, fmt.Errorf("任务输入解析失败：%w", err)
-	}
 	ctx = s.enrichGenerationRuntime(ctx, generation.CallMeta{UserID: userID, TaskID: taskExecutionID(ctx), ProjectID: taskProjectID, TaskType: taskType})
-	if strings.TrimSpace(input.Prompt) == "" {
-		input.Prompt = fallbackPrompt
-	}
-	if input.Mode == "" && strings.HasPrefix(taskType, "video_") {
-		input.Mode = "video"
-	}
-	if input.Mode == "text" && strings.HasPrefix(taskType, "canvas_text") && input.AgentRequests == nil {
-		textPublisher := newTaskTextStreamPublisher(s, userID, taskExecutionID(ctx))
-		input.OnTextDelta = textPublisher.Publish
-		defer textPublisher.Close()
-	}
-	return generation.Execute(ctx, input)
+	return localtask.ExecuteCanvasGenerationTask(ctx, fallbackPrompt, rawInput, localtask.CanvasGenerationPorts{
+		AppendTextDelta: func(uid, tid, delta string) error {
+			_, err := s.AppendTaskTextDelta(uid, tid, delta)
+			return err
+		},
+		LogWarning: func(uid, tid, message, payload string) {
+			_ = s.log(uid, tid, "warn", message, payload)
+		},
+	})
 }
 
 func providerMediaHydrationPolicyFor(ctx context.Context, input canvasGenerationInput) providerMediaHydrationPolicy {

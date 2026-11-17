@@ -64,6 +64,8 @@ export default function ProjectDetailPage() {
     const workspace = workspaceQuery.data;
     const detail: ProjectDetail | undefined = project ? {
         project,
+        unitProjectRevision: workspace?.projectRevision,
+        unitListProjectRevision: unitsQuery.data?.projectRevision,
         units: workspace?.unit ? units.map((unit) => unit.id === workspace.unit.id ? workspace.unit : unit) : units,
         canvases: [],
         canvasUnitLinks: [],

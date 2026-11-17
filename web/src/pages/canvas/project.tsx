@@ -7,6 +7,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
 import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
 import { useCanvasSelectionContext } from "./use-canvas-selection-context";
 import { queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
@@ -150,9 +151,9 @@ function InfiniteCanvasPage() {
     const cleanupAssetImages = useAssetStore((state) => state.cleanupImages);
     const defaultDrawingEngine = DEFAULT_DRAWING_ENGINE;
     const shortDramaEnabled = useUserStore((state) => state.features.shortDramaEnabled);
-    const storageMode = useUserStore((state) => state.storageMode);
-    const user = useUserStore((state) => state.user);
-    const localOnly = isLocalWorkspaceMode() || storageMode === "local" || user?.username === "local" || import.meta.env.VITE_CANVAS_LOCAL_MODE !== "false";
+    const features = useUserStore((state) => state.features);
+    const localOnly = isLocalWorkspaceMode();
+    const generationEnabled = isWorkspaceFeatureEnabled("generationEnabled", features, localOnly);
     const storedCanvasProjects = useCanvasStore((state) => state.projects);
     const workspaceCanvases = useMemo(
         () => listCanvasWorkspaceProjectCanvases(storedCanvasProjects, projectId),
@@ -363,10 +364,11 @@ function InfiniteCanvasPage() {
     });
 
     const versions = useCanvasVersionHistory(projectId, restoreCanvasProjectVersion, currentProject);
-    const internalAssistantEnabled = !isEmbeddedRuntime();
+    const internalAssistantEnabled = !isEmbeddedRuntime() && isWorkspaceFeatureEnabled("assistantEnabled", features, localOnly);
     // 画布右侧只有一个栏位：助手和版本记录互斥，谁被打开另一个就让位。
     const assistant = useCanvasAssistant({
         canvasId: projectId,
+        enabled: internalAssistantEnabled,
         onCanvasChanged: (canvasId, changedNodeIds) => {
             if (canvasId !== projectId) return;
             void refreshLocalCanvasProjectIfChanged(canvasId).then(() => highlightAssistantNodes(containerRef.current, changedNodeIds));
@@ -374,7 +376,7 @@ function InfiniteCanvasPage() {
     });
     const canvasMainRef = useRef<HTMLElement>(null);
     const assistantDockable = useCanvasAssistantDockable(canvasMainRef);
-    const rightPanel = resolveCanvasRightPanel(assistant.open, versions.open);
+    const rightPanel = resolveCanvasRightPanel(internalAssistantEnabled && assistant.open, versions.open);
     const openVersions = () => { workflowsRef.current?.closeLibrary(); assistant.setOpen(false); setVersionCompareRootId(null); versions.show(); };
     const toggleVersions = () => {
         if (!versions.open) { workflowsRef.current?.closeLibrary(); assistant.setOpen(false); }
@@ -382,16 +384,18 @@ function InfiniteCanvasPage() {
         versions.toggle();
     };
     const toggleAssistant = useCallback(() => {
+        if (!internalAssistantEnabled) return;
         const next = !assistant.open;
         if (next) { workflowsRef.current?.closeLibrary(); versions.close(); }
         assistant.setOpen(next);
-    }, [assistant, versions]);
+    }, [assistant, internalAssistantEnabled, versions]);
     const openAssistant = useCallback(() => {
+        if (!internalAssistantEnabled) return;
         exitFocusMode();
         workflowsRef.current?.closeLibrary();
         versions.close();
         assistant.setOpen(true);
-    }, [assistant, exitFocusMode, versions]);
+    }, [assistant, exitFocusMode, internalAssistantEnabled, versions]);
     // 修复素材关联仍遵守当前画布版本，不能替用户确认覆盖云端的新内容。
     const confirmForceSaveCanvas = useCallback(() => {
         modal.confirm({
@@ -994,6 +998,8 @@ function InfiniteCanvasPage() {
         pageUi,
         canvasId: projectId,
         domainProjectId: currentProject?.projectId,
+        domainProjectRevision: linkedProjectQuery.data?.project.revision,
+        stylePickerOpen: dialogs.stylePickerOpen,
         nodesRef,
         selectedNodeIdsRef,
         getCanvasCenter,
@@ -1446,6 +1452,8 @@ function InfiniteCanvasPage() {
                             <CanvasShortDramaGuide progress={shortDramaGuide.progress} collapsed={shortDramaGuide.collapsed} onToggle={shortDramaGuide.onToggle} onSkip={skipShortDramaGuide} onStepClick={activateShortDramaStep} />
                         ) : null}
 
+                        {!localOnly && !generationEnabled ? <p role="status" className="shrink-0 border-b border-[var(--user-border)] px-4 py-2 text-[13px] leading-5 text-[var(--user-ink-muted)]">平台生成尚未开放</p> : null}
+
                         <div className="relative flex min-h-0 min-w-0 flex-1">
                             <div className="relative min-w-0 flex-1 overflow-hidden">
                                 <InfiniteCanvas
@@ -1773,7 +1781,7 @@ function InfiniteCanvasPage() {
                                 onCreateReferenceGroup={createReferenceGroup}
                                 onBatchConnect={() => beginBatchConnectionMode(Array.from(selectedNodeIds))}
                                 onMergeVideos={() => void mergeSelectedVideos()}
-                                onAskAssistant={askSelectedNodes}
+                                onAskAssistant={internalAssistantEnabled ? askSelectedNodes : undefined}
                                 onSaveWorkflow={readOnly ? undefined : () => workflowsRef.current?.saveSelection()}
                             />
                         ) : null}
@@ -1955,7 +1963,7 @@ function InfiniteCanvasPage() {
                     {versions.preview ? <CanvasVersionPreview key={versions.preview.key} preview={versions.preview} busy={versions.restoring || versions.confirming} onReturn={versions.returnToCurrent} onShowVersions={versions.show} /> : null}
                     </div>
                 </CanvasOverlayLayerProvider>
-                {rightPanel === "assistant" && !focusMode && !versions.preview ? (
+                {internalAssistantEnabled && rightPanel === "assistant" && !focusMode && !versions.preview ? (
                     <CanvasAssistantSidebar
                         proposalFeedback={assistantProposalFeedback}
                         runningProposalIds={runningProposalIds}

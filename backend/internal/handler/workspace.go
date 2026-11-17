@@ -33,6 +33,9 @@ type workspaceBootstrap interface {
 // configs is only the model-config fallback for requests that have no injected
 // provider port; bootstrap owns identity, limits, features, and the connection.
 func RegisterWorkspaceRoutes(r *gin.RouterGroup, bootstrap workspaceBootstrap) {
+	r.GET("/runtime", func(c *gin.Context) {
+		ok(c, gin.H{"mode": "local", "contractVersion": DesktopContractVersion})
+	})
 	r.GET("/workspace/bootstrap", func(c *gin.Context) {
 		scope, err := CurrentWorkspace(c)
 		if err != nil {

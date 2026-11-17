@@ -70,6 +70,9 @@ func AssetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {
 	}
 	category := model.NormalizeAssetCategory(model.AssetCategory(payload.Category), payload.Kind)
 	status := model.AssetVersionStatus(strings.TrimSpace(payload.Status))
+	if status == model.AssetVersionStatusDeleting {
+		return model.Asset{}, kernel.BadAuthRequest("删除中状态只能由资源清理流程设置")
+	}
 	if status == "" {
 		status = model.AssetVersionStatusConfirmed
 	}

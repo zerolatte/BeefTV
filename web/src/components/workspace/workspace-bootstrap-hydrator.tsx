@@ -2,12 +2,15 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { FullScreenLoader } from "@/components/ui/aceternity/full-screen-loader";
+import { PlatformAuthGate } from "@/components/platform/platform-auth-gate";
 import { WorkspaceStartupError } from "@/components/workspace/workspace-startup-error";
 import { appPathname } from "@/lib/app-routing";
 import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
 import { applyUserSession, localWorkspaceConfig } from "@/lib/user-session";
 import { getWorkspaceBootstrap, type WorkspaceBootstrapPayload } from "@/services/api/workspace";
+import { getRuntimeModeContract } from "@/services/api/platform-auth";
+import { getRuntimeMode, setRuntimeMode } from "@/services/workspace-mode";
 import { hydrateLocalCanvasProjectsFromBackend } from "@/services/local-workspace-repository";
 import { commitModelConfig, flushModelConfig, hydrateModelConfig } from "@/services/model-config-repository";
 import {
@@ -23,6 +26,39 @@ import { normalizeConfigSnapshot, useConfigStore } from "@/stores/use-config-sto
 import { useUserStore } from "@/stores/use-user-store";
 
 export function WorkspaceBootstrapHydrator({ children }: { children: ReactNode }) {
+    const runtimeMode = useUserStore((state) => state.runtimeMode);
+    const [runtimeError, setRuntimeError] = useState<string>();
+    const [runtimeRetry, setRuntimeRetry] = useState(0);
+
+    useEffect(() => {
+        if (getRuntimeMode() !== "unknown") return;
+        let cancelled = false;
+        setRuntimeError(undefined);
+        void getRuntimeModeContract().then((contract) => {
+            if (cancelled) return;
+            setRuntimeMode(contract.mode);
+        }).catch((error) => {
+            if (!cancelled) setRuntimeError(error instanceof Error ? error.message : "运行模式暂时无法确认，请重试。");
+        });
+        return () => { cancelled = true; };
+    }, [runtimeRetry]);
+
+    if (runtimeError) {
+        return (
+            <div className="app-user-workspace grid min-h-dvh place-items-center p-5">
+                <div className="grid max-w-lg gap-4" role="alert">
+                    <p className="text-[14px] leading-[22px]" style={{ color: "var(--user-ink)" }}>{runtimeError}</p>
+                    <button className="rounded-[var(--r-sm)] px-4 py-2 text-[13px] leading-5 font-[550]" style={{ background: "var(--btn-solid-bg)", color: "var(--btn-solid-fg)" }} onClick={() => setRuntimeRetry((value) => value + 1)}>重新连接</button>
+                </div>
+            </div>
+        );
+    }
+    if (runtimeMode === "platform") return <PlatformAuthGate>{children}</PlatformAuthGate>;
+    if (runtimeMode === "local") return <LocalWorkspaceBootstrapHydrator>{children}</LocalWorkspaceBootstrapHydrator>;
+    return <FullScreenLoader label="正在确认运行模式" detail="" />;
+}
+
+function LocalWorkspaceBootstrapHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
     const bootSnapshot = useSyncExternalStore(subscribeDesktopBootSnapshot, getDesktopBootSnapshot, getDesktopBootSnapshot);
     const modelConfigReady = useRef(false);

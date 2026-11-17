@@ -1,5 +1,6 @@
 import { http } from "./request";
 import type { GenerationTask } from "./task-center";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 export type UpscaleMode = "precision" | "generative" | "transparent";
 export type UpscaleModelOption = { id: string; label: string; billingMode?: string; billingSummary?: string };
@@ -18,6 +19,7 @@ export const estimateUpscale = (params: UpscaleParams) => http.post<UpscaleEstim
     return quote;
 });
 export function createUpscaleTask(params: UpscaleParams & { clientOperationId: string; projectId: string; nodeId: string }) {
+    assertGenerationAvailable();
     return http.post<GenerationTask>("/media-upscale/tasks", params, { timeout: UPSCALE_CREATE_TIMEOUT_MS }).then(task => {
         window.dispatchEvent(new CustomEvent("canvas:task-created", { detail: { task } }));
         return task;

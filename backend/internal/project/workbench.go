@@ -1,10 +1,6 @@
 package project
 
-import (
-	"infinite-canvas/backend/internal/model"
-
-	"golang.org/x/sync/errgroup"
-)
+import "golang.org/x/sync/errgroup"
 
 func (s *Service) ProjectCore(userID string, projectID string) (Core, error) {
 	item, err := s.Owned(userID, projectID)
@@ -15,26 +11,11 @@ func (s *Service) ProjectCore(userID string, projectID string) (Core, error) {
 }
 
 func (s *Service) ProjectUnitSummaries(userID string, projectID string) (UnitSummaries, error) {
-	if _, err := s.Owned(userID, projectID); err != nil {
+	units, counts, revision, err := s.repo.ProjectUnitIndexSnapshot(userID, projectID)
+	if err != nil {
 		return UnitSummaries{}, err
 	}
-	var units []model.ProjectUnit
-	var canvasCounts map[string]int64
-	var group errgroup.Group
-	group.Go(func() error {
-		var err error
-		units, err = s.repo.ProjectUnitSummaries(projectID)
-		return err
-	})
-	group.Go(func() error {
-		var err error
-		canvasCounts, err = s.repo.ProjectUnitCanvasCounts(projectID)
-		return err
-	})
-	if err := group.Wait(); err != nil {
-		return UnitSummaries{}, err
-	}
-	return UnitSummaries{Units: units, CanvasCounts: canvasCounts}, nil
+	return UnitSummaries{Units: units, CanvasCounts: counts, ProjectRevision: revision}, nil
 }
 
 func (s *Service) ProjectOverview(userID string, projectID string) (Overview, error) {

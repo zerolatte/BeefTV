@@ -218,7 +218,7 @@ func TestTaskRequestEvidenceResumesOriginalSubmission(t *testing.T) {
 func TestTaskRequestEvidenceLocalInputConstraint(t *testing.T) {
 	ctx, recorder := withTaskRequestEvidence(context.Background())
 	input := canvasGenerationInput{Prompt: "PRIVATE prompt", Config: providerConfig{Model: "gpt-image-2", Size: "2048x2048", Quality: "medium", Count: "1"}, ReferenceImages: []providerMedia{{Bytes: 1234, Width: 1024, Height: 1024}, {}, {}}, ImageCapability: &ImageCapabilityConfig{References: ImageReferenceConfig{MaxImages: 2, MaxImageBytes: 5000}}}
-	recordTaskDiagnosticInput(ctx, input)
+	generation.RecordTaskDiagnosticInput(ctx, input)
 	err := validateImageTask(input.ImageCapability, input)
 	if err == nil {
 		t.Fatal("expected reference limit")

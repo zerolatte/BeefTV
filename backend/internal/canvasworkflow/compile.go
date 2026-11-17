@@ -3,7 +3,6 @@ package canvasworkflow
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 
@@ -440,7 +439,7 @@ func Compile(host CompileHost, user string, d Definition, existing *model.Canvas
 			prompt = recipe.Request.Prompt
 			input["prompt"] = prompt
 		}
-		mentions, err := nodePromptBindings(prompt, recipe.Bindings, nodes, d.Edges, n.ID)
+		mentions, err := NodePromptBindings(prompt, recipe.Bindings, nodes, d.Edges, n.ID)
 		if err != nil {
 			return CompileResult{}, err
 		}
@@ -489,28 +488,21 @@ func Materialize(host CompileHost, user, operation string, recipe Recipe, nodes 
 	}
 	metadata["source"] = "canvas-workflow"
 	metadata["clientOperationId"] = operation
-	bindings := append([]Binding(nil), recipe.Bindings...)
-	// Render all substitutions against original offsets. New user text may
-	// contain another variable's old text without becoming a second replacement.
-	sort.SliceStable(bindings, func(i, j int) bool { return bindings[i].Index > bindings[j].Index })
-	for _, binding := range bindings {
+	prompt, _ := req.Input["prompt"].(string)
+	if _, exists := req.Input["prompt"]; !exists {
+		prompt = req.Prompt
+	}
+	if req.Prompt, err = RenderPromptBindings(prompt, recipe.Bindings, steps); err != nil {
+		return req, err
+	}
+	req.Input["prompt"] = req.Prompt
+	for _, binding := range recipe.Bindings {
+		if PromptBinding(binding.Field) {
+			continue
+		}
 		value := steps[binding.NodeID]
 		if value == nil || value.Status != "succeeded" {
 			return req, BadRequest("执行步骤的输入尚未就绪")
-		}
-		if PromptBinding(binding.Field) {
-			prompt, _ := req.Input["prompt"].(string)
-			end := binding.Index + len(binding.Original)
-			if binding.Index < 0 || end > len(prompt) || prompt[binding.Index:end] != binding.Original {
-				return req, BadRequest("提示词变量位置失效，请重新保存工作流")
-			}
-			replacement := value.Text
-			if binding.Field == "promptMention" {
-				replacement = binding.ReferenceLabel
-			}
-			req.Input["prompt"] = prompt[:binding.Index] + replacement + prompt[end:]
-			req.Prompt = req.Input["prompt"].(string)
-			continue
 		}
 		resource, err := ReadyResource(host.Repository(), user, value.ResourceID, nodes[binding.NodeID].MediaType)
 		if err != nil {

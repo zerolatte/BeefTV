@@ -33,6 +33,9 @@ import { backfillCanvasTaskOutcomes } from "@/services/canvas-task-outcome-backf
 import { registerDesktopUpdatePreparation } from "@/services/desktop-update-preparation";
 import { queryGenerationTask } from "@/services/api/task-center";
 import { persistCanvasNodeFailure } from "@/lib/canvas/canvas-node-failure-state";
+import { getActiveUserScope } from "@/lib/user-scope";
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from "@/services/workspace-session";
+import { registerPlatformDraftPort } from "@/services/platform-workspace-drafts";
 
 const CANVAS_VIEWPORT_SAVE_DELAY_MS = 2000;
 
@@ -227,6 +230,8 @@ export function useCanvasProjectLifecycle({
     const hydrated = useCanvasStore((state) => state.hydrated);
     const sessionHydrated = useUserStore((state) => state.hydrated);
     const localMode = isLocalWorkspaceMode();
+    const platformMode = useUserStore((state) => state.runtimeMode === "platform");
+    const serverPersistence = localMode || platformMode;
     const openProject = useCanvasStore((state) => state.openProject);
     const updateProject = useCanvasStore((state) => state.updateProject);
     const renameProject = useCanvasStore((state) => state.renameProject);
@@ -589,7 +594,7 @@ export function useCanvasProjectLifecycle({
             // Task acknowledgements can already be present in the store before
             // this editor observes them. Equal local graphs still need a CAS save
             // when the backend has not confirmed that document yet.
-            if (localMode && hasUnconfirmedCanvasEdits(projectId)) scheduleLocalCanvasBackendSync(projectId);
+            if (serverPersistence && hasUnconfirmedCanvasEdits(projectId)) scheduleLocalCanvasBackendSync(projectId);
             return;
         }
         traceCanvasGraph("editor.autosave", { observed: { id: projectId, ...observedContentRef.current }, render: { id: projectId, ...snapshot }, live: { id: projectId, nodes: nodesRef.current, connections: connectionsRef.current }, stored: useCanvasStore.getState().openProject(projectId) });
@@ -603,22 +608,23 @@ export function useCanvasProjectLifecycle({
         // 远端结果投影到编辑器不是一次本地编辑，避免改写时间戳并触发反向保存。
         if (stored && canvasDocumentMatchesFields(stored, patch)) {
             observedStoreRef.current = stored;
-            if (localMode && hasUnconfirmedCanvasEdits(projectId)) scheduleLocalCanvasBackendSync(projectId);
+            if (serverPersistence && hasUnconfirmedCanvasEdits(projectId)) scheduleLocalCanvasBackendSync(projectId);
             return;
         }
         updateProject(projectId, patch);
         observedStoreRef.current = storedEditorProject() ?? observedStoreRef.current;
-        if (localMode) scheduleLocalCanvasBackendSync(projectId);
+        if (serverPersistence) scheduleLocalCanvasBackendSync(projectId);
     }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connections, historyPausedRef, nodes, observedAtRender, projectId, projectLoaded, showImageInfo, updateProject]);
 
     useEffect(() => {
         if (!projectLoaded || editorProjectIdRef.current !== projectId) return;
+        const session = captureWorkspaceSession();
         if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
         // Persisting reconciles and serializes the whole canvas store. Wait
         // until the camera has rested so the write never lands between wheel
         // notches; unmount and leave flushes still save the latest viewport.
         viewportSaveTimerRef.current = setTimeout(() => {
-            if (editorProjectIdRef.current !== projectId) return;
+            if (!isWorkspaceSessionCurrent(session) || editorProjectIdRef.current !== projectId) return;
             updateProject(projectId, { viewport: viewportRef.current });
             viewportSaveTimerRef.current = null;
         }, CANVAS_VIEWPORT_SAVE_DELAY_MS);
@@ -627,10 +633,13 @@ export function useCanvasProjectLifecycle({
         };
     }, [projectId, projectLoaded, updateProject, viewport, viewportRef]);
 
-    useEffect(() => () => {
-        if (!projectLoaded || editorProjectIdRef.current !== projectId) return;
-        if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
-        updateProject(projectId, { viewport: viewportRef.current });
+    useEffect(() => {
+        const session = captureWorkspaceSession();
+        return () => {
+            if (!isWorkspaceSessionCurrent(session) || !projectLoaded || editorProjectIdRef.current !== projectId) return;
+            if (viewportSaveTimerRef.current) clearTimeout(viewportSaveTimerRef.current);
+            updateProject(projectId, { viewport: viewportRef.current });
+        };
     }, [projectId, projectLoaded, updateProject, viewportRef]);
 
     // Non-ref editor state for the leave flush. Synced in a layout effect, not
@@ -644,8 +653,9 @@ export function useCanvasProjectLifecycle({
     // page must not depend on the 400 ms store timer or the 500 ms backend timer.
     useEffect(() => {
         if (!projectLoaded) return;
+        const session = captureWorkspaceSession();
         const flushOnLeave = (reason: string) => {
-            if (editorProjectIdRef.current !== projectId) return;
+            if (!isWorkspaceSessionCurrent(session) || editorProjectIdRef.current !== projectId) return;
             if (!useCanvasStore.getState().openProject(projectId)) return;
             const live = leaveFlushStateRef.current;
             const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, ...live };
@@ -667,7 +677,8 @@ export function useCanvasProjectLifecycle({
             updateProject(projectId, { viewport: viewportRef.current });
             void (async () => {
                 await flushCanvasStorePersistence();
-                if (localMode) await syncLocalCanvasProjectToBackend(projectId);
+                if (!isWorkspaceSessionCurrent(session)) return;
+                if (serverPersistence) await syncLocalCanvasProjectToBackend(projectId);
             })().catch((error) => {
                 if (isCanvasSubmitControlError(error)) return;
                 console.error("离开画布时保存失败", { projectId, reason, error });
@@ -684,7 +695,7 @@ export function useCanvasProjectLifecycle({
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             flushOnLeave("leave");
         };
-    }, [connectionsRef, localMode, nodesRef, projectId, projectLoaded, updateProject, viewportRef]);
+    }, [connectionsRef, serverPersistence, nodesRef, projectId, projectLoaded, updateProject, viewportRef]);
 
     const createAndOpenCanvas = useCallback(() => {
         const workspaceProjectId = currentProject ? canvasWorkspaceProjectId(currentProject) : undefined;
@@ -725,6 +736,7 @@ export function useCanvasProjectLifecycle({
 
     const persistLocalEdits = useCallback(async () => {
         if (!projectLoaded || editorProjectIdRef.current !== projectId) return;
+        const session = captureWorkspaceSession();
         const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, chatSessions, activeChatId, canvasAppearance, backgroundMode, showImageInfo };
         if (observedContentRef.current && !canvasDocumentMatchesFields(observedContentRef.current, snapshot)) {
             traceCanvasGraph("editor.explicitSave", { observed: { id: projectId, ...observedContentRef.current }, live: { id: projectId, ...snapshot }, stored: useCanvasStore.getState().openProject(projectId) });
@@ -744,8 +756,30 @@ export function useCanvasProjectLifecycle({
         }
         updateProject(projectId, { viewport: viewportRef.current });
         await flushCanvasStorePersistence();
-        if (localMode) await syncLocalCanvasProjectToBackend(projectId);
-    }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connectionsRef, localMode, nodesRef, projectId, projectLoaded, showImageInfo, updateProject, viewportRef]);
+        if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更，草稿保留", "AbortError");
+        if (serverPersistence) await syncLocalCanvasProjectToBackend(projectId);
+    }, [activeChatId, backgroundMode, canvasAppearance, chatSessions, connectionsRef, serverPersistence, nodesRef, projectId, projectLoaded, showImageInfo, updateProject, viewportRef]);
+
+    useEffect(() => {
+        if (!platformMode || !projectLoaded) return;
+        const scope = getActiveUserScope();
+        return registerPlatformDraftPort({
+            id: `canvas-editor:${projectId}`,
+            scope,
+            inspect: () => {
+                const snapshot = { nodes: nodesRef.current, connections: connectionsRef.current, ...leaveFlushStateRef.current };
+                return {
+                    id: `canvas-editor:${projectId}`,
+                    label: currentProject?.title || "画布编辑",
+                    hasUnsynced: hasUnconfirmedCanvasEdits(projectId) || Boolean(observedContentRef.current && !canvasDocumentMatchesFields(observedContentRef.current, snapshot)),
+                };
+            },
+            flush: async (signal) => {
+                if (signal?.aborted || getActiveUserScope() !== scope) throw new DOMException("草稿同步已取消", "AbortError");
+                await persistLocalEdits();
+            },
+        });
+    }, [platformMode, projectLoaded, projectId, currentProject?.title, connectionsRef, nodesRef, persistLocalEdits]);
 
     useEffect(() => {
         if (!projectLoaded) return;

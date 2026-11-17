@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +33,9 @@ func TestExternalCLIAndMCPRealBusinessUpload(t *testing.T) {
 	defer cancel()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "beeftv")
+	if runtime.GOOS == "windows" {
+		bin += ".exe"
+	}
 	build := exec.CommandContext(ctx, "go", "build", "-o", bin, "./cmd/beeftv")
 	build.Dir = filepath.Join("..", "..")
 	if out, err := build.CombinedOutput(); err != nil {

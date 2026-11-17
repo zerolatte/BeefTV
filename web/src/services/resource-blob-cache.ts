@@ -1,7 +1,8 @@
-import { RESOURCE_BLOB_META_STORE_NAME, RESOURCE_BLOBS_STORE_NAME, localForageInstance } from "@/lib/localforage-storage";
+import { RESOURCE_BLOB_META_STORE_NAME, RESOURCE_BLOBS_STORE_NAME, localForageInstance, localForageScopeIsLocked } from "@/lib/localforage-storage";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { getResourceBlob, resourceIdFromStorageKey } from "@/services/api/resources";
 import { createCanvasImagePreviewBlob } from "@/lib/canvas/canvas-image-preview-blob";
+import { captureWorkspaceSession, isWorkspaceSessionGenerationCurrent } from "@/services/workspace-session";
 
 type ResourceCacheMeta = {
     key: string;
@@ -11,6 +12,7 @@ type ResourceCacheMeta = {
     size: number;
     mimeType: string;
     lastAccessedAt: number;
+    sessionGeneration?: number;
 };
 
 const blobStore = localForageInstance(RESOURCE_BLOBS_STORE_NAME);
@@ -19,7 +21,7 @@ const objectUrls = new Map<string, string>();
 const sessionBlobs = new Map<string, Blob>();
 const inFlight = new Map<string, Promise<string>>();
 const persistedReads = new Map<string, Promise<Blob | null>>();
-const scheduled = new Set<string>();
+const scheduled = new Map<string, ReturnType<typeof setTimeout> | undefined>();
 const cacheMetaTouchWarnings = new Set<string>();
 const metaTouchedAt = new Map<string, number>();
 const downloadQueue: Array<{ key?: string; run: () => void }> = [];
@@ -46,7 +48,7 @@ export async function cacheResourceImagePreviewObjectUrl(storageKey: string, max
     const originalTarget = cacheTarget(storageKey, getActiveUserScope());
     if (!originalTarget || ![128, 512, 1024, 2048].includes(maxSize)) return "";
     const version = `canvas-preview-v2-p3-${maxSize}`;
-    const target = { ...originalTarget, version, key: `${getActiveUserScope()}:${originalTarget.resourceId}:${version}` };
+    const target = { ...originalTarget, version, key: `${originalTarget.userScope}:${originalTarget.resourceId}:${version}` };
     if (reload) await cacheResourceObjectUrl(storageKey, true);
     const cached = reload ? "" : await readCachedObjectUrl(target);
     if (cached) return cached;
@@ -55,10 +57,12 @@ export async function cacheResourceImagePreviewObjectUrl(storageKey: string, max
     if (pending) return pending;
     // Decode one original at a time, sharing work across duplicated nodes.
     const task = imagePreviewQueue.catch(() => undefined).then(async () => {
+        if (!cacheTargetIsCurrent(target)) return "";
         const original = await getCachedResourceBlob(storageKey);
-        if (!original) return "";
+        if (!original || !cacheTargetIsCurrent(target)) return "";
         sessionBlobs.set(originalTarget.key, original);
         const preview = await createCanvasImagePreviewBlob(original, maxSize);
+        if (!cacheTargetIsCurrent(target)) return "";
         if (preview === original) return objectUrl(originalTarget.key, original);
         sessionBlobs.set(target.key, preview);
         void enqueuePersist(target, preview);
@@ -68,6 +72,7 @@ export async function cacheResourceImagePreviewObjectUrl(storageKey: string, max
         if (reload && previous) URL.revokeObjectURL(previous);
         return url;
     }).catch((error) => {
+        if (!cacheTargetIsCurrent(target)) return "";
         console.warn("图片预览生成失败，保留原图显示", { resourceId: target.resourceId, error });
         return cacheResourceObjectUrl(storageKey);
     }).finally(() => inFlight.delete(requestKey));
@@ -94,6 +99,7 @@ export async function cacheResourceObjectUrl(storageKey: string, reload = false,
     if (reload) {
         // Explicit image decode recovery must bypass both memory and IndexedDB.
         await inFlight.get(requestKey)?.catch(() => undefined);
+        if (!cacheTargetIsCurrent(target)) return "";
         const blob = await withDownloadSlot(() => downloadResourceBlob(storageKey, target), priority);
         if (!blob) return "";
         const oldUrl = objectUrls.get(target.key);
@@ -103,6 +109,7 @@ export async function cacheResourceObjectUrl(storageKey: string, reload = false,
         return url;
     }
     const cached = await readCachedObjectUrl(target);
+    if (!cacheTargetIsCurrent(target)) return "";
     if (cached) return cached;
     const pending = inFlight.get(requestKey);
     if (pending) {
@@ -123,11 +130,14 @@ export async function cacheResourceObjectUrl(storageKey: string, reload = false,
  * 这样不会让 IndexedDB 缓存阻塞首帧，同时后续打开可直接复用本地 Object URL。
  */
 export function scheduleResourceBlobCache(storageKey: string, delayMs = 4_000) {
-    const requestKey = `${getActiveUserScope()}:${storageKey}`;
+    const target = cacheTarget(storageKey, getActiveUserScope());
+    if (!target) return;
+    const requestKey = `${target.userScope}:${storageKey}`;
     if (!resourceIdFromStorageKey(storageKey) || scheduled.has(requestKey)) return;
-    scheduled.add(requestKey);
+    scheduled.set(requestKey, undefined);
     const run = () => {
         void Promise.resolve().then(() => {
+            if (!cacheTargetIsCurrent(target)) return "";
             return cacheResourceObjectUrl(storageKey);
         })
             .catch((error) => {
@@ -141,7 +151,7 @@ export function scheduleResourceBlobCache(storageKey: string, delayMs = 4_000) {
         run();
         return;
     }
-    window.setTimeout(run, Math.max(0, delayMs));
+    scheduled.set(requestKey, setTimeout(run, Math.max(0, delayMs)));
 }
 
 function withDownloadSlot<T>(task: () => Promise<T>, priority = false, key?: string) {
@@ -178,11 +188,13 @@ export async function getCachedResourceBlob(storageKey: string) {
     const sessionBlob = sessionBlobs.get(target.key);
     if (sessionBlob) return sessionBlob;
     const cached = await readPersistedBlob(target);
+    if (!cacheTargetIsCurrent(target)) return null;
     if (cached) {
         touchCacheMetaSafely(target);
         return cached;
     }
     await cacheResourceObjectUrl(storageKey, false, true);
+    if (!cacheTargetIsCurrent(target)) return null;
     const result = sessionBlobs.get(target.key) || await readPersistedBlob(target);
     return result;
 }
@@ -194,8 +206,9 @@ async function downloadAndCacheResource(storageKey: string, target: ResourceCach
 }
 
 async function downloadResourceBlob(storageKey: string, target: ResourceCacheMeta) {
+    if (!cacheTargetIsCurrent(target)) return null;
     const blob = await getResourceBlob(storageKey);
-    if (!blob) return null;
+    if (!blob || !cacheTargetIsCurrent(target)) return null;
     sessionBlobs.set(target.key, blob);
     if (blob.size <= MAX_CACHE_BYTES) void enqueuePersist(target, blob);
     return blob;
@@ -213,12 +226,15 @@ function enqueuePersist(target: ResourceCacheMeta, blob: Blob) {
 }
 
 async function persistBlob(target: ResourceCacheMeta, blob: Blob) {
+    if (!cacheTargetIsCurrent(target)) return;
     // 不尝试写入超过当前缓存预算的单个媒体，避免触发浏览器配额异常和无效的全量淘汰。
     if (blob.size > (await cacheBudget())) return;
     await evictFor(blob.size, target.key);
 
     const write = async () => {
+        if (!cacheTargetIsCurrent(target)) return;
         await blobStore.setItem(target.key, blob);
+        if (!cacheTargetIsCurrent(target)) return;
         await metaStore.setItem(target.key, {
             ...target,
             size: blob.size,
@@ -257,13 +273,14 @@ async function persistBlob(target: ResourceCacheMeta, blob: Blob) {
 }
 
 async function readCachedObjectUrl(target: ResourceCacheMeta) {
+    if (!cacheTargetIsCurrent(target)) return "";
     const existing = objectUrls.get(target.key);
     if (existing) {
         touchCacheMetaSafely(target);
         return existing;
     }
     const blob = sessionBlobs.get(target.key) || await readPersistedBlob(target);
-    if (!blob) return "";
+    if (!blob || !cacheTargetIsCurrent(target)) return "";
     touchCacheMetaSafely(target);
     return objectUrl(target.key, blob);
 }
@@ -284,6 +301,7 @@ function readPersistedBlob(target: ResourceCacheMeta) {
 }
 
 function cacheTarget(storageKey: string, userScope: string): ResourceCacheMeta | null {
+    if (localForageScopeIsLocked(userScope)) return null;
     const resourceId = resourceIdFromStorageKey(storageKey);
     if (!resourceId) return null;
     // 本地桌面工作区没有登录用户，guest 只是本地命名空间，不代表
@@ -299,10 +317,12 @@ function cacheTarget(storageKey: string, userScope: string): ResourceCacheMeta |
         size: 0,
         mimeType: "application/octet-stream",
         lastAccessedAt: Date.now(),
+        sessionGeneration: captureWorkspaceSession().generation,
     };
 }
 
 async function touchCacheMeta(target: ResourceCacheMeta) {
+    if (!cacheTargetIsCurrent(target)) return;
     const now = Date.now();
     // 同一会话内重复访问不落 IndexedDB：淘汰扫描在写入时才需要元数据，
     // 内存时间戳足够让高频读取跳过跨进程 I/O。
@@ -310,7 +330,7 @@ async function touchCacheMeta(target: ResourceCacheMeta) {
     if (lastTouchedAt && now - lastTouchedAt < TOUCH_INTERVAL_MS) return;
     metaTouchedAt.set(target.key, now);
     const current = await metaStore.getItem<ResourceCacheMeta>(target.key);
-    if (!current || now - current.lastAccessedAt < TOUCH_INTERVAL_MS) return;
+    if (!current || !cacheTargetIsCurrent(target) || now - current.lastAccessedAt < TOUCH_INTERVAL_MS) return;
     await metaStore.setItem(target.key, { ...current, lastAccessedAt: now });
 }
 
@@ -385,6 +405,31 @@ function objectUrl(key: string, blob: Blob) {
     const url = URL.createObjectURL(blob);
     objectUrls.set(key, url);
     return url;
+}
+
+function cacheTargetIsCurrent(target: ResourceCacheMeta) {
+    return !localForageScopeIsLocked(target.userScope) && target.userScope === getActiveUserScope()
+        && (target.sessionGeneration === undefined || isWorkspaceSessionGenerationCurrent(target.sessionGeneration));
+}
+
+export async function clearResourceBlobCacheForScope(scope: string) {
+    const prefix = `${scope}:`;
+    for (const [key, timer] of scheduled) {
+        if (!key.startsWith(prefix)) continue;
+        if (timer !== undefined) clearTimeout(timer);
+        scheduled.delete(key);
+    }
+    for (const [key, url] of objectUrls) {
+        if (!key.startsWith(prefix)) continue;
+        URL.revokeObjectURL(url);
+        objectUrls.delete(key);
+    }
+    for (const entries of [sessionBlobs, inFlight, persistedReads, metaTouchedAt]) {
+        for (const key of entries.keys()) if (key.startsWith(prefix)) entries.delete(key);
+    }
+    for (const key of cacheMetaTouchWarnings) if (key.startsWith(prefix)) cacheMetaTouchWarnings.delete(key);
+    await persistQueue;
+    invalidateCacheStats();
 }
 
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

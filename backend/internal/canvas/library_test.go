@@ -142,7 +142,7 @@ func TestCanvasSaveRejectsUnknownLibraryFolder(t *testing.T) {
 	svc := newCanvasHistoryTestService(t)
 	_, err := svc.UpsertUserCanvasProject("owner", json.RawMessage(`{"id":"canvas","revision":0,"title":"x","folderId":"missing","nodes":[]}`))
 	var appError *kernel.AppError
-	if !errors.As(err, &appError) || appError.Status != http.StatusBadRequest {
+	if !errors.As(err, &appError) || appError.Status != http.StatusNotFound {
 		t.Fatalf("unknown folder = %v", err)
 	}
 }
@@ -161,7 +161,7 @@ func TestCanvasDrawingRejectsForeignPreviewResource(t *testing.T) {
 	})
 	_, err := svc.UpsertUserCanvasDrawing("owner", "canvas", "sketch", raw)
 	var appError *kernel.AppError
-	if !errors.As(err, &appError) || appError.Status != http.StatusBadRequest {
+	if !errors.As(err, &appError) || appError.Status != http.StatusNotFound {
 		t.Fatalf("foreign preview = %v", err)
 	}
 }
@@ -463,7 +463,7 @@ func TestCanvasSaveRejectsTombstonedLibraryFolder(t *testing.T) {
 	}
 	_, err := svc.UpsertUserCanvasProject("owner", json.RawMessage(`{"id":"canvas","revision":2,"title":"分镜","folderId":"folder-1","nodes":[]}`))
 	var appError *kernel.AppError
-	if !errors.As(err, &appError) || appError.Status != http.StatusBadRequest {
+	if !errors.As(err, &appError) || appError.Status != http.StatusNotFound {
 		t.Fatalf("stale folder payload = %v", err)
 	}
 	saved, err := svc.UpsertUserCanvasProject("owner", json.RawMessage(`{"id":"canvas","revision":2,"title":"分镜","nodes":[]}`))

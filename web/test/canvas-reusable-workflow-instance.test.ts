@@ -2,7 +2,7 @@ import { applyCanvasNodeDragPreview } from "../src/lib/canvas/canvas-live-viewpo
 import { ensureMediaNodeMinimumSize } from "../src/lib/canvas/canvas-node-size";
 import { removeCanvasNodes } from "../src/lib/canvas/canvas-project-domain";
 import { describe, expect, test } from "bun:test";
-import { isWorkflowMaterialSource, canExportWorkflowResult, createWorkflowResultNode, workflowAtPoint, createWorkflowInstance, normalizeWorkflowContainers, workflowDropSlot, workflowInstanceInputs, workflowInstanceLocked, workflowSlotTitle } from "../src/lib/canvas/reusable-workflow-instance";
+import { isWorkflowMaterialSource, canExportWorkflowResult, createWorkflowResultNode, workflowAtPoint, createWorkflowInstance, normalizeWorkflowContainers, workflowDropSlot, workflowInstanceInputs, workflowInstanceLocked, workflowRunNeedsPolling, workflowSlotTitle } from "../src/lib/canvas/reusable-workflow-instance";
 import { canOpenCanvasNodePromptPanel } from "../src/lib/canvas/canvas-node-semantics";
 import { isFrameNode } from "../src/lib/canvas/canvas-frame";
 import { getNodeGenerationMode } from "../src/lib/canvas/node-registry";
@@ -125,6 +125,38 @@ describe("canvas workflow instances", () => {
         expect(workflowInstanceLocked(control)).toBe(true);
         expect(control.metadata?.reusableWorkflow?.run?.id).toBe("run");
         expect(restored.filter(node => node.metadata?.workflowSlot?.instanceId === control.id)).toHaveLength(5);
+    });
+    test("重试提交结果未知时，持久保留操作标识并锁定输入", () => {
+        const graph = createWorkflowInstance(workflow, { x: 0, y: 0 });
+        graph.control.metadata!.reusableWorkflow!.run = { id: "failed-run", status: "failed" } as WorkflowRun;
+        graph.control.metadata!.reusableWorkflow!.retryIntent = { runId: "failed-run", clientOperationId: "retry-once" };
+        const restored = JSON.parse(JSON.stringify(graph.control)) as CanvasNodeData;
+        expect(restored.metadata?.reusableWorkflow?.retryIntent).toEqual({ runId: "failed-run", clientOperationId: "retry-once" });
+        expect(workflowInstanceLocked(restored)).toBe(true);
+        restored.metadata!.reusableWorkflow!.retryIntent = undefined;
+        expect(workflowInstanceLocked(restored)).toBe(false);
+    });
+    test("额度暂停保留运行身份、锁定输入，并持续同步在途结果或另一设备的继续操作", () => {
+        const graph = createWorkflowInstance(workflow, { x: 0, y: 0 });
+        const run = { id: "paused-run", status: "paused", reason: "quota_exceeded",
+            steps: [{ nodeId: "depth", title: "深度", status: "running", taskId: "accepted" },
+                { nodeId: "out", title: "结果", status: "pending" }] } as WorkflowRun;
+        graph.control.metadata!.reusableWorkflow!.run = run;
+        expect(workflowInstanceLocked(graph.control)).toBe(true);
+        expect(workflowRunNeedsPolling(run)).toBe(true);
+        const input = graph.nodes.find(node => node.metadata?.workflowSlot?.nodeId === "person")!;
+        const source: CanvasNodeData = { id: "replacement", title: "新参考", type: CanvasNodeType.Image,
+            width: 100, height: 100, position: { x: 0, y: 0 }, metadata: { storageKey: "resource:new" } };
+        expect(workflowDropSlot(graph.nodes, source, { x: input.position.x + 10, y: input.position.y + 10 })).toBeUndefined();
+        const saved = JSON.parse(JSON.stringify(graph.control)) as CanvasNodeData;
+        expect(saved.metadata?.reusableWorkflow?.run?.id).toBe("paused-run");
+        expect(workflowInstanceLocked(saved)).toBe(true);
+        run.steps[0].status = "succeeded";
+        expect(workflowRunNeedsPolling(run)).toBe(true);
+        run.status = "queued";
+        expect(workflowRunNeedsPolling(run)).toBe(true);
+        run.status = "succeeded";
+        expect(workflowRunNeedsPolling(run)).toBe(false);
     });
     test("allows a completed result from another instance as a reference without allowing self binding", () => {
         const graph = createWorkflowInstance(workflow, { x: 100, y: 100 });

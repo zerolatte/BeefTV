@@ -1,5 +1,7 @@
+import { createWorkspaceSessionRequest, type WorkspaceSessionRequestBinding } from "@/services/workspace-session";
+
 type ActiveGenerationConsumer = {
-    controller: AbortController;
+    controller: WorkspaceSessionRequestBinding;
     settled: Promise<unknown>;
 };
 
@@ -23,19 +25,18 @@ export function activeGenerationConsumerController(controller: AbortController):
 export function runGenerationConsumer<T>(signal: AbortSignal | undefined, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
     if (pausedTransitions > 0) return Promise.reject(abortError());
 
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    if (signal?.aborted) abort();
-    else signal?.addEventListener("abort", abort, { once: true });
+    const controller = createWorkspaceSessionRequest(signal);
 
     const active = {} as ActiveGenerationConsumer;
     const result = Promise.resolve().then(async () => {
         if (controller.signal.aborted) throw abortError();
-        return operation(controller.signal);
+        const value = await operation(controller.signal);
+        if (!controller.isCurrent() || controller.signal.aborted) throw abortError();
+        return value;
     });
     active.controller = controller;
     active.settled = result.finally(() => {
-        signal?.removeEventListener("abort", abort);
+        controller.release();
         activeGenerationConsumers.delete(active);
     });
     activeGenerationConsumers.add(active);
@@ -43,14 +44,12 @@ export function runGenerationConsumer<T>(signal: AbortSignal | undefined, operat
 }
 
 export function beginGenerationConsumer(signal?: AbortSignal): GenerationConsumerHandle {
-    const controller = new AbortController();
+    const controller = createWorkspaceSessionRequest(signal);
     if (pausedTransitions > 0) {
         controller.abort();
+        controller.release();
         return { signal: controller.signal, release() {} };
     }
-    const abort = () => controller.abort();
-    if (signal?.aborted) abort();
-    else signal?.addEventListener("abort", abort, { once: true });
     let release!: () => void;
     const settled = new Promise<void>((resolve) => {
         release = resolve;
@@ -63,7 +62,7 @@ export function beginGenerationConsumer(signal?: AbortSignal): GenerationConsume
         release() {
             if (released) return;
             released = true;
-            signal?.removeEventListener("abort", abort);
+            controller.release();
             activeGenerationConsumers.delete(active);
             release();
         },

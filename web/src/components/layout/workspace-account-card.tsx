@@ -7,6 +7,7 @@ import "./workspace-account-card.css";
 /** 本地工作区账户卡片，只保留本地设置入口。 */
 export function WorkspaceAccountCard({ onNavigate }: { onNavigate: () => void }) {
     const user = useUserStore((state) => state.user);
+    const runtimeMode = useUserStore((state) => state.runtimeMode);
     if (!user) return null;
     return <section className="workspace-account-card" aria-label="我的账户">
         <header className="workspace-account-card-identity">
@@ -14,8 +15,8 @@ export function WorkspaceAccountCard({ onNavigate }: { onNavigate: () => void })
             <div><strong>{user.displayName || user.username}</strong><span>@{user.username}</span></div>
             <em>{user.role === "admin" ? "管理员" : "创作者"}</em>
         </header>
-        <nav className="workspace-account-card-actions" aria-label="账户操作">
+        {runtimeMode === "local" ? <nav className="workspace-account-card-actions" aria-label="账户操作">
             <Link to="/settings" onClick={onNavigate}><Settings /><span>本地设置</span><ArrowUpRight /></Link>
-        </nav>
+        </nav> : null}
     </section>;
 }

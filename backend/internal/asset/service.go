@@ -83,25 +83,27 @@ type ResourceDelivery = assets.ResourceDelivery
 
 // Service owns durable local resource rules.
 type Service struct {
-	repo         Repository
-	blobs        BlobStore
-	quota        Quota
-	lifecycle    Lifecycle
-	localStorage bool
-	dataDir      string
-	sessionMu    sync.Mutex
-	sessions     map[string]*chunkedUploadSession
+	repo                 Repository
+	blobs                BlobStore
+	quota                Quota
+	lifecycle            Lifecycle
+	localStorage         bool
+	dataDir              string
+	resumeChunkedUploads bool
+	sessionMu            sync.Mutex
+	sessions             map[string]*chunkedUploadSession
 }
 
 func NewService(deps Dependencies) *Service {
 	svc := &Service{
-		repo:         deps.Repository,
-		blobs:        deps.Blobs,
-		quota:        deps.Quota,
-		lifecycle:    deps.Lifecycle,
-		localStorage: deps.LocalStorage,
-		dataDir:      strings.TrimSpace(deps.DataDir),
-		sessions:     map[string]*chunkedUploadSession{},
+		repo:                 deps.Repository,
+		blobs:                deps.Blobs,
+		quota:                deps.Quota,
+		lifecycle:            deps.Lifecycle,
+		localStorage:         deps.LocalStorage,
+		dataDir:              strings.TrimSpace(deps.DataDir),
+		resumeChunkedUploads: deps.ResumeChunkedUploads,
+		sessions:             map[string]*chunkedUploadSession{},
 	}
 	if svc.dataDir != "" {
 		svc.abandonStaleSessions()

@@ -89,7 +89,8 @@ func saveLocation(root string, location Location) error {
 	return nil
 }
 
-func canonical(path string) (string, error) {
+// CanonicalDirectory 统一目录别名、Windows 短路径和尚未创建的子目录身份。
+func CanonicalDirectory(path string) (string, error) {
 	path = strings.TrimSpace(path)
 	if !filepath.IsAbs(path) || filepath.Dir(filepath.Clean(path)) == filepath.Clean(path) {
 		return "", errors.New("请选择磁盘中的文件夹，例如 D:\\BeefTV")
@@ -106,6 +107,12 @@ func canonical(path string) (string, error) {
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", err
+		}
+		// 只有路径项本身不存在才允许补齐；已有悬空链接不能当作普通的新目录。
+		if _, statErr := os.Lstat(path); statErr == nil {
+			return "", fmt.Errorf("已有路径无法解析，请检查悬空链接：%w", err)
+		} else if !errors.Is(statErr, os.ErrNotExist) {
+			return "", statErr
 		}
 		parent := filepath.Dir(path)
 		if parent == path {

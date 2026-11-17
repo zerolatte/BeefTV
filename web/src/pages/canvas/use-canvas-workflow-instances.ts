@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type Dispatch, type MutableRefObject, t
 import { nanoid } from "nanoid";
 import { App } from "antd";
 import { canvasNodeResourceId } from "@/lib/canvas/canvas-resource-id";
-import { isWorkflowMaterialSource, canExportWorkflowResult, createWorkflowResultNode, upgradeWorkflowInstance, workflowAtPoint, createWorkflowInstance, normalizeWorkflowContainers, workflowDropSlot, workflowInstanceInputs, workflowInstanceLocked, type WorkflowInstanceAction } from "@/lib/canvas/reusable-workflow-instance";
+import { isWorkflowMaterialSource, canExportWorkflowResult, createWorkflowResultNode, upgradeWorkflowInstance, workflowAtPoint, createWorkflowInstance, normalizeWorkflowContainers, workflowDropSlot, workflowInstanceInputs, workflowInstanceLocked, workflowRunNeedsPolling, type WorkflowInstanceAction } from "@/lib/canvas/reusable-workflow-instance";
 import { cancelWorkflowRun, getWorkflowEditor, getWorkflowRun, selectWorkflowImage, retryWorkflowRun, startWorkflowRun, type CanvasWorkflow, type WorkflowRun, type WorkflowValue } from "@/services/api/canvas-workflows";
 import { getResource, resourceFileUrl } from "@/services/api/resources";
 import { submissionAcceptanceUnknown } from "@/services/api/generation-submission";
@@ -107,7 +107,7 @@ export function useCanvasWorkflowInstances({ canvasId, domainProjectId, readOnly
         commit(current => {
             const previous = current.find(node => node.id === instanceId)?.metadata?.reusableWorkflow?.run;
             if (previous?.id !== run.id || Date.parse(previous.updatedAt) > Date.parse(run.updatedAt)) return current;
-            if (!["queued", "running"].includes(previous.status) && ["queued", "running"].includes(run.status)) return current;
+            if (!["queued", "running", "paused"].includes(previous.status) && ["queued", "running"].includes(run.status)) return current;
             return current.map(node => {
                 if (node.id === instanceId) return { ...node, metadata: { ...node.metadata, reusableWorkflow: { ...node.metadata!.reusableWorkflow!, run, runApplied: true, error: undefined } } };
                 if (node.metadata?.workflowSlot?.instanceId !== instanceId) return node;
@@ -129,7 +129,7 @@ export function useCanvasWorkflowInstances({ canvasId, domainProjectId, readOnly
             if (nodesRef.current.some(node => node.metadata?.workflowSlot?.instanceId === instanceId && (locks.current.has(node.id) || uploads.current.has(node.id)))) throw new Error("素材正在保存，请稍后运行");
             let run: WorkflowRun;
             if (kind === "start") {
-                if (state.run?.status === "queued" || state.run?.status === "running") return;
+                if (state.run && ["queued", "running", "paused"].includes(state.run.status)) return;
                 for (const source of state.definition.nodes) {
                     if (nodesRef.current.filter(node => node.metadata?.workflowSlot?.instanceId === instanceId && node.metadata.workflowSlot.nodeId === source.id).length !== 1) throw new Error("工作流节点重复或缺失，请从模板库重新添加");
                 }
@@ -147,10 +147,20 @@ export function useCanvasWorkflowInstances({ canvasId, domainProjectId, readOnly
             } else {
                 if (!state.run) return;
                 if (kind === "retry" && state.inputsChanged) throw new Error("输入已更换，请开始新一轮运行");
-                run = kind === "retry" ? await retryWorkflowRun(state.run.id, config) : await cancelWorkflowRun(state.run.id, config);
+                if (kind === "retry") {
+                    const retryIntent = state.retryIntent?.runId === state.run.id ? state.retryIntent : { clientOperationId: `workflow-retry:${nanoid()}`, runId: state.run.id };
+                    commit(current => current.map(node => node.id === instanceId ? { ...node, metadata: { ...node.metadata, reusableWorkflow: { ...node.metadata!.reusableWorkflow!, retryIntent, error: undefined } } } : node));
+                    if (!await persist()) throw new Error("重试标识未能保存，请保存画布后重试");
+                    assertCurrent();
+                    if (!nodesRef.current.some(node => node.id === instanceId)) throw new Error("工作流实例已移除，未提交重试");
+                    // 网络失败保留原批次；再次确认和刷新页面后都继续同一操作。
+                    run = await retryWorkflowRun(state.run.id, { clientOperationId: retryIntent.clientOperationId }, config);
+                } else {
+                    run = await cancelWorkflowRun(state.run.id, config);
+                }
             }
             commit(current => current.map(node => {
-                if (node.id === instanceId) return { ...node, metadata: { ...node.metadata, reusableWorkflow: { ...node.metadata!.reusableWorkflow!, intent: undefined, run, runApplied: false, inputsChanged: false, error: undefined } } };
+                if (node.id === instanceId) return { ...node, metadata: { ...node.metadata, reusableWorkflow: { ...node.metadata!.reusableWorkflow!, intent: undefined, retryIntent: undefined, run, runApplied: false, inputsChanged: false, error: undefined } } };
                 const slot = node.metadata?.workflowSlot;
                 if (kind !== "start" || slot?.instanceId !== instanceId || slot.role === "input" || slot.role === "constant") return node;
                 return { ...node, metadata: { ...node.metadata, content: "", storageKey: undefined, assetId: undefined, workflowSlot: { ...slot, status: "pending", error: undefined } } };
@@ -164,7 +174,7 @@ export function useCanvasWorkflowInstances({ canvasId, domainProjectId, readOnly
             }
         } finally { locks.current.delete(instanceId); }
     };
-    const runningKey = nodes.filter(node => node.metadata?.reusableWorkflow?.run && (!node.metadata.reusableWorkflow.runApplied || ["queued", "running"].includes(node.metadata.reusableWorkflow.run.status))).map(node => `${node.id}:${node.metadata!.reusableWorkflow!.run!.id}`).join("|");
+    const runningKey = nodes.filter(node => node.metadata?.reusableWorkflow?.run && (!node.metadata.reusableWorkflow.runApplied || workflowRunNeedsPolling(node.metadata.reusableWorkflow.run))).map(node => `${node.id}:${node.metadata!.reusableWorkflow!.run!.id}`).join("|");
     useEffect(() => {
         if (readOnly || !runningKey) return;
         let cancelled = false;

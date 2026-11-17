@@ -83,11 +83,11 @@ func MigrationLocation(root, current string) (Location, error) {
 	if err = json.Unmarshal(body, &location); err != nil {
 		return Location{}, err
 	}
-	resolved, err := canonical(current)
+	resolved, err := CanonicalDirectory(current)
 	if err != nil {
 		return Location{}, err
 	}
-	stored, err := canonical(location.DataDir)
+	stored, err := CanonicalDirectory(location.DataDir)
 	if err != nil {
 		return Location{}, err
 	}
@@ -100,7 +100,7 @@ func MigrationLocation(root, current string) (Location, error) {
 // Caller must refuse a live legacy runtime, whose version predates the lock.
 // Verify all remaining source files before deleting any. Repeated cleanup after
 // a filesystem failure is safe; changed or newly added files always stop it.
-func CleanupPrevious(root, current string, acquireLock func(string) (*os.File, error)) error {
+func CleanupPrevious[L io.Closer](root, current string, acquireLock func(string) (L, error)) error {
 	location, err := MigrationLocation(root, current)
 	if err != nil {
 		return err

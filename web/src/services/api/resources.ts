@@ -4,6 +4,11 @@ import { isLocalRuntimeMode } from "@/lib/runtime-mode";
 import { createClientId } from "@/lib/client-id";
 import { http, apiBaseURL, ApiError, type HttpRequestConfig } from "@/services/api/request";
 import { startOperation } from "@/stores/use-operation-progress";
+import { getRuntimeMode } from "@/services/workspace-mode";
+import { getActiveUserScope } from "@/lib/user-scope";
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from "@/services/workspace-session";
+import { captureWorkspaceGuard } from "@/services/workspace-session-guard";
+import { resourceUploadDigest } from "@/services/resource-upload-digest";
 
 export type RemoteResource = {
     id: string;
@@ -68,6 +73,7 @@ export async function extractResourceVideoFrames(
     payload: ExtractResourceVideoFramesRequest,
     options?: { idempotencyKey?: string; signal?: AbortSignal },
 ) {
+    assertResourceWritesAvailable();
     const base = uploadConfig(options?.idempotencyKey);
     const data = await http.post<ExtractResourceVideoFramesResponse>(
         `/resources/${encodeURIComponent(id)}/frames`,
@@ -88,6 +94,7 @@ export async function separateResourceVideoAudio(
     id: string,
     options?: { idempotencyKey?: string; signal?: AbortSignal },
 ) {
+    assertResourceWritesAvailable();
     const base = uploadConfig(options?.idempotencyKey);
     const data = await http.post<SeparateResourceVideoAudioResponse>(
         `/resources/${encodeURIComponent(id)}/separate-audio`,
@@ -104,6 +111,7 @@ export async function separateResourceVideoAudio(
 }
 
 export async function prepareResourcePlayback(id: string, config?: HttpRequestConfig) {
+    assertResourceWritesAvailable();
     const data = await http.post<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(id)}/playback`, {}, config);
     return data.resource;
 }
@@ -144,6 +152,13 @@ export class ResourceUploadError extends Error {
         this.name = "ResourceUploadError";
         this.status = options.status;
         this.permanent = options.permanent;
+    }
+}
+
+/** 平台存储预留尚未交付时，写入必须显式失败，不能降级成浏览器缓存成功。 */
+function assertResourceWritesAvailable() {
+    if (getRuntimeMode() === "platform") {
+        throw new ResourceUploadError("平台暂未开放此资源处理操作", { status: 403, permanent: true });
     }
 }
 
@@ -202,6 +217,7 @@ export async function getCanvasDocumentLimitMB(): Promise<number> {
 }
 
 export async function updateCanvasDocumentLimitMB(canvasDocumentMB: number): Promise<number> {
+    assertResourceWritesAvailable();
     const normalized = Math.trunc(canvasDocumentMB);
     if (!Number.isFinite(normalized) || normalized < 0 || normalized > MAX_CANVAS_DOCUMENT_LIMIT_MB) {
         throw new Error(`单画布容量上限请填写 0（不限制）或 1–${MAX_CANVAS_DOCUMENT_LIMIT_MB} 之间的整数（MB）`);
@@ -217,6 +233,7 @@ export async function updateCanvasDocumentLimitMB(canvasDocumentMB: number): Pro
 }
 
 export async function syncResourceToArkPrivateAsset(id: string) {
+    assertResourceWritesAvailable();
     const data = await http.post<{ sync: ArkPrivateAssetSync }>(`/resources/${encodeURIComponent(id)}/ark-private-asset`);
     return data.sync;
 }
@@ -286,14 +303,16 @@ export async function uploadResourceFile(
     meta?: ResourceUploadMeta,
     onProgress?: (uploadedBytes: number, totalBytes: number) => void,
 ): Promise<RemoteResource> {
+    const assertCurrentSession = captureWorkspaceGuard();
     const name = meta?.fileName || (file instanceof File ? file.name : `${kind}.${extensionFromMime(file.type, kind)}`);
     const progress = startOperation(name, { totalBytes: file.size, detail: isLocalRuntimeMode() ? "正在保存到本地资源目录" : "正在准备上传" });
     const report = (loaded: number, total: number) => { progress.progress(loaded, total); onProgress?.(loaded, total); };
     // 分片与 multipart 两条路径的失败都要归一成 ResourceUploadError，
     // 否则调用方只能靠文案猜测该重试还是该报错。
     try {
-        if (file.size > CHUNK_UPLOAD_THRESHOLD) {
+        if (getRuntimeMode() === "platform" || file.size > CHUNK_UPLOAD_THRESHOLD) {
             const resource = await uploadFileInChunks(file, name, kind, meta, report);
+            assertCurrentSession();
             rememberResource(resource);
             progress.done("文件已确认并保存");
             return resource;
@@ -305,12 +324,13 @@ export async function uploadResourceFile(
         if (meta?.height) formData.append("height", String(Math.round(meta.height)));
         if (meta?.durationMs) formData.append("durationMs", String(Math.round(meta.durationMs)));
         const data = await http.post<{ resource: RemoteResource }>("/resources", formData, {
-            ...uploadConfig(meta?.idempotencyKey),
+            ...uploadConfig(meta?.idempotencyKey, file.size),
             onUploadProgress: ({ loaded, total }) => {
                 if (total && total > 0) report(Math.min(file.size, file.size * loaded / total), file.size);
                 else progress.progress(loaded);
             },
         });
+        assertCurrentSession();
         rememberResource(data.resource);
         progress.done("文件已确认并保存");
         return data.resource;
@@ -328,11 +348,15 @@ export async function uploadResourceFile(
 // 分片上传：POST 开始会话 → 逐片 PUT 原始二进制（每片 8MB）→ POST 合并落库。
 // 同一次上传重试复用会话，只重传尚未确认完整收到的片。
 async function uploadFileInChunks(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void) {
+    const assertCurrentSession = captureWorkspaceGuard();
+    const contentDigest = getRuntimeMode() === "platform" ? await resourceUploadDigest(file, assertCurrentSession) : undefined;
     const retryMeta = { ...meta, idempotencyKey: meta?.idempotencyKey || `resource-upload:${createClientId()}` };
     for (let attempt = 0; attempt < CHUNK_UPLOAD_RETRIES; attempt++) {
+        assertCurrentSession();
         try {
-            return await runChunkedUpload(file, name, kind, retryMeta, onProgress);
+            return await runChunkedUpload(file, name, kind, retryMeta, onProgress, contentDigest);
         } catch (error) {
+            assertCurrentSession();
             if (error instanceof ResourceUploadError && error.permanent) throw error;
             if (attempt === CHUNK_UPLOAD_RETRIES - 1) throw error;
             await prepareChunkRetry(error);
@@ -341,8 +365,10 @@ async function uploadFileInChunks(file: Blob, name: string, kind: "image" | "vid
     throw new Error("上传失败");
 }
 
-async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void) {
-    const session = await http.post<{ uploadId: string; chunkSize: number; chunkCount: number; received?: number[] }>("/resources/uploads", { fileName: name, kind, size: file.size, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs }, uploadConfig(meta?.idempotencyKey));
+async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video" | "audio" | "file", meta: ResourceUploadMeta | undefined, onProgress?: (uploadedBytes: number, totalBytes: number) => void, contentDigest?: string) {
+    const assertCurrentSession = captureWorkspaceGuard();
+    const session = await http.post<{ uploadId: string; chunkSize: number; chunkCount: number; received?: number[] }>("/resources/uploads", { fileName: name, kind, size: file.size, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs, contentDigest }, uploadConfig(meta?.idempotencyKey));
+    assertCurrentSession();
     const received = new Set(session.received ?? []);
     if (!session.uploadId || !Number.isSafeInteger(session.chunkSize) || session.chunkSize <= 0 || session.chunkCount !== Math.ceil(file.size / session.chunkSize) || [...received].some((index) => !Number.isInteger(index) || index < 0 || index >= session.chunkCount)) {
         throw new ResourceUploadError("上传分片回执无效", { permanent: true });
@@ -359,10 +385,12 @@ async function runChunkedUpload(file: Blob, name: string, kind: "image" | "video
             headers: { "Content-Type": "application/octet-stream" },
             onUploadProgress: onProgress ? ({ loaded }) => onProgress(uploaded + Math.min(loaded, blob.size), file.size) : undefined,
         });
+        assertCurrentSession();
         uploaded += blob.size;
         onProgress?.(uploaded, file.size);
     }
     const complete = await http.post<{ resource: RemoteResource }>(`/resources/uploads/${encodeURIComponent(session.uploadId)}/complete`, undefined, uploadConfig());
+    assertCurrentSession();
     return complete.resource;
 }
 
@@ -373,7 +401,14 @@ async function prepareChunkRetry(error: unknown) {
 }
 
 function rememberResource(resource: RemoteResource) {
-    resourceCache.set(resource.id, resource);
+    resourceCache.set(`${getActiveUserScope()}\0${resource.id}`, resource);
+}
+
+export function clearResourceMetadataCacheForScope(scope: string) {
+    const prefix = `${scope}\0`;
+    for (const cache of [resourceCache, resourceRequests, missingResourceIds]) {
+        for (const key of cache.keys()) if (key.startsWith(prefix)) cache.delete(key);
+    }
 }
 
 // 失败分类直接复用 request() 已经算好的 ApiError.retryable（408/425/429/5xx 可重试），
@@ -398,14 +433,18 @@ function normalizeUploadError(error: unknown): ResourceUploadError {
 }
 
 export async function importResourceFromUrl(url: string, kind: "image" | "video" | "audio" | "file", meta?: Omit<ResourceUploadMeta, "fileName">) {
+    assertResourceWritesAvailable();
     const data = await http.post<{ resource: RemoteResource }>("/resources/import", { url, kind, width: meta?.width, height: meta?.height, durationMs: meta?.durationMs }, uploadConfig(meta?.idempotencyKey));
     rememberResource(data.resource);
     return data.resource;
 }
 
-function uploadConfig(idempotencyKey?: string): HttpRequestConfig {
+function uploadConfig(idempotencyKey?: string, uploadSize?: number): HttpRequestConfig {
     const value = idempotencyKey?.trim();
-    return value ? { headers: { "X-Idempotency-Key": value } } : {};
+    const headers: Record<string, string> = {};
+    if (value) headers["X-Idempotency-Key"] = value;
+    if (uploadSize !== undefined && Number.isSafeInteger(uploadSize) && uploadSize > 0) headers["X-Upload-Size"] = String(uploadSize);
+    return Object.keys(headers).length > 0 ? { headers } : {};
 }
 
 function lookupAbortError(signal?: { aborted?: boolean }) {
@@ -421,9 +460,10 @@ function rememberLookupResult(cacheKey: string, resource: RemoteResource, signal
 }
 
 export function getResource(id: string, config?: HttpRequestConfig): Promise<RemoteResource> {
+    const session = captureWorkspaceSession();
     const blocked = lookupAbortError(config?.signal);
     if (blocked) return Promise.reject(blocked);
-    const cacheKey = id;
+    const cacheKey = `${getActiveUserScope()}\0${id}`;
     const cached = resourceCache.get(cacheKey);
     const ensureMetadata = config?.params?.metadata === "ensure";
     if (cached && !ensureMetadata) return Promise.resolve(cached);
@@ -437,8 +477,12 @@ export function getResource(id: string, config?: HttpRequestConfig): Promise<Rem
         ...config,
         signal: config?.signal,
     })
-        .then((data) => rememberLookupResult(cacheKey, data.resource, config?.signal))
+        .then((data) => {
+            if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
+            return rememberLookupResult(cacheKey, data.resource, config?.signal);
+        })
         .catch((error) => {
+            if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
             if (error instanceof DOMException && error.name === "AbortError") throw error;
             const abandoned = lookupAbortError(config?.signal);
             if (abandoned) throw abandoned;
@@ -454,13 +498,17 @@ export function getResource(id: string, config?: HttpRequestConfig): Promise<Rem
 
 // refreshResource 绕过缓存强制拉取资源最新状态（转码副本就绪轮询用），并回写缓存。
 export function refreshResource(id: string, config?: HttpRequestConfig): Promise<RemoteResource> {
+    const session = captureWorkspaceSession();
     const blocked = lookupAbortError(config?.signal);
     if (blocked) return Promise.reject(blocked);
-    const cacheKey = id;
+    const cacheKey = `${getActiveUserScope()}\0${id}`;
     return http.get<{ resource: RemoteResource }>(`/resources/${encodeURIComponent(id)}`, {
         ...config,
         signal: config?.signal,
-    }).then((data) => rememberLookupResult(cacheKey, data.resource, config?.signal));
+    }).then((data) => {
+        if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
+        return rememberLookupResult(cacheKey, data.resource, config?.signal);
+    });
 }
 
 export async function getResourceOSSUrl(storageKey?: string) {

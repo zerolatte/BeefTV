@@ -11,11 +11,10 @@ import "./home-dashboard.css";
 
 export default function HomePage() {
     const userId = useUserStore((state) => state.user?.id);
-    const storageMode = useUserStore((state) => state.storageMode);
     const sessionHydrated = useUserStore((state) => state.hydrated);
     const localProjects = useCanvasStore((state) => state.projects);
     const localHydrated = useCanvasStore((state) => state.hydrated);
-    const localMode = isLocalWorkspaceMode() || storageMode === "local";
+    const localMode = isLocalWorkspaceMode();
     const query = useQuery({
         queryKey: ["beeftv-home-canvases", userId],
         queryFn: () => listWorkspaceCanvasProjectsPage({ page: 1, pageSize: 4, sort: "updated" }),
@@ -31,5 +30,5 @@ export default function HomePage() {
         })), [localProjects]);
     const projects = localMode ? localSummaries : query.data?.projects || [];
 
-    return <HomeDashboard projects={projects} loading={!sessionHydrated || !localHydrated || (!localMode && Boolean(userId) && query.isPending)} error={!localMode && query.isError} onRetry={() => void query.refetch()} />;
+    return <HomeDashboard projects={projects} loading={!sessionHydrated || (localMode && !localHydrated) || (!localMode && Boolean(userId) && query.isPending)} error={!localMode && query.isError} onRetry={() => void query.refetch()} />;
 }

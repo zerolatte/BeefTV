@@ -178,6 +178,7 @@ const createRun = (): CanvasRun => ({
 });
 
 type Options = {
+    enabled?: boolean;
     canvasId: string;
     /** 回合落地后画布要立刻拉取最新内容，并把改动过的节点高亮出来。 */
     onCanvasChanged?: (canvasId: string, changedNodeIds: string[]) => void;
@@ -199,9 +200,9 @@ function readStoredProposals(): Set<string> {
  * 每个画布各持一条运行记录：发送时冻结画布归属，异步结果只写回当时那条记录，
  * 切画布不会把回复落到别的画布上。已结束的回合来自服务端历史，刷新页面不丢。
  */
-export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
+export function useCanvasAssistant({ canvasId, onCanvasChanged, enabled = true }: Options) {
     const embedded = isEmbeddedRuntime();
-    const [open, setOpenState] = useState(() => !embedded && scopedLocalStorage.getItem(OPEN_STORAGE_KEY) !== "0");
+    const [open, setOpenState] = useState(() => enabled && !embedded && scopedLocalStorage.getItem(OPEN_STORAGE_KEY) !== "0");
     const [width, setWidthState] = useState(() => clampAssistantWidth(Number(scopedLocalStorage.getItem(WIDTH_STORAGE_KEY)) || ASSISTANT_DEFAULT_WIDTH));
     const [status, setStatus] = useState<AgentHostStatus | null>(null);
     const [statusBusy, setStatusBusy] = useState(false);
@@ -248,10 +249,10 @@ export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
     }, []);
 
     const setOpen = useCallback((next: boolean) => {
-        if (embedded) return;
+        if (embedded || !enabled) return;
         setOpenState(next);
         scopedLocalStorage.setItem(OPEN_STORAGE_KEY, next ? "1" : "0");
-    }, [embedded]);
+    }, [embedded, enabled]);
 
     const setWidth = useCallback((next: number) => {
         const clamped = clampAssistantWidth(next);
@@ -262,7 +263,7 @@ export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
     // 状态只在面板打开时复查：关着的面板不该一直问后端。正在启动时节奏更快。
     const starting = status?.reason === "host_starting";
     useEffect(() => {
-        if (!open) return;
+        if (!open || !enabled) return;
         let cancelled = false;
         const refresh = () => {
             getAgentHostStatus()
@@ -272,7 +273,7 @@ export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
         refresh();
         const timer = setInterval(refresh, starting ? 2000 : 15000);
         return () => { cancelled = true; clearInterval(timer); };
-    }, [open, starting]);
+    }, [enabled, open, starting]);
 
     const loadHistory = useCallback(async (targetCanvas: string, sessionId?: string) => {
         const run = runFor(targetCanvas);
@@ -354,7 +355,7 @@ export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
 
     // 打开面板或切画布时补齐这条画布的历史；已经载入过就不重复拉。
     useEffect(() => {
-        if (!open) return;
+        if (!open || !enabled) return;
         let reading = false;
         const timer = setInterval(() => {
             const run = runFor(canvasId);
@@ -363,14 +364,14 @@ export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
             void loadHistory(canvasId).finally(() => { reading = false; });
         }, 2000);
         return () => clearInterval(timer);
-    }, [canvasId, loadHistory, open, runFor]);
+    }, [canvasId, enabled, loadHistory, open, runFor]);
 
     useEffect(() => {
-        if (!open) return;
+        if (!open || !enabled) return;
         const run = runFor(canvasId);
         if (run.historyLoaded || run.streaming || run.sessionBusy) return;
         void loadHistory(canvasId);
-    }, [canvasId, loadHistory, open, runFor, status?.available]);
+    }, [canvasId, enabled, loadHistory, open, runFor, status?.available]);
 
     const send = useCallback(async (text: string, selectedNodeIds: string[], references: AgentChatReference[] = [], input: { attachments?: AssistantAttachment[]; skills?: AssistantSkillSelection[]; permissionMode?: AssistantPermissionMode} = {}) => {
         const message = text.trim();

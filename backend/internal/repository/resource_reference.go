@@ -57,7 +57,7 @@ func (r *Repository) ResourcesForUserIDs(userID string, resourceIDs []string) ([
 		return []model.Resource{}, nil
 	}
 	var resources []model.Resource
-	err := r.db.Where("user_id = ? AND id IN ?", userID, resourceIDs).Find(&resources).Error
+	err := liveResources(r.db).Where("user_id = ? AND id IN ?", userID, resourceIDs).Find(&resources).Error
 	return resources, err
 }
 
@@ -87,7 +87,7 @@ func (r *Repository) ResourceReferenceSnapshot(userID string, excludingAssetID s
 	if len(resourceIDs) == 0 {
 		return snapshot, nil
 	}
-	history, err := r.CanvasHistoryResourceReferences(resourceIDs)
+	history, err := r.CanvasHistoryResourceReferences(userID, resourceIDs)
 	if err != nil {
 		return snapshot, err
 	}
@@ -335,23 +335,53 @@ func (r *Repository) AssetBusinessReferences(userID string, assetID string) ([]R
 // IMMEDIATE writer transaction. expectedStatus, when set, is checked against
 // the row and applied to the delete so a restore cannot commit with this TX.
 func (r *Repository) DeleteAssetAndResources(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob, expectedStatus ...string) error {
+	return r.DeleteAssetAndResourcesAfterGuard(userID, assetID, resourceIDs, deletionJobs, nil, expectedStatus...)
+}
+
+// PrepareAssetDeletion 在同一写事务内复核所有引用并持久化删除意图，不操作文件。
+func (r *Repository) PrepareAssetDeletion(userID, assetID string, resourceIDs []string, prepare func(*gorm.DB) error, expectedStatus ...string) error {
+	return withImmediateTransaction(r.db, func(tx *gorm.DB) error {
+		if err := guardOwnedAssetDeletion(tx, userID, assetID, resourceIDs, expectedStatus...); err != nil {
+			return err
+		}
+		if err := guardTaskResourceReferences(tx, userID, resourceIDs, false); err != nil {
+			return err
+		}
+		return prepare(tx)
+	})
+}
+
+func guardOwnedAssetDeletion(tx *gorm.DB, userID, assetID string, resourceIDs []string, expectedStatus ...string) error {
+	var item model.Asset
+	if err := tx.Where("id = ? AND user_id = ?", assetID, userID).First(&item).Error; err != nil {
+		return err
+	}
+	if len(expectedStatus) > 0 && expectedStatus[0] != "" && string(item.Status) != expectedStatus[0] {
+		return ErrAssetExpectedStatusMismatch
+	}
+	if err := guardAssetDeletionReferences(tx, userID, assetID, resourceIDs); err != nil {
+		return err
+	}
+	return New(tx).RequireNoCanvasHistoryReferences(resourceIDs)
+}
+
+// DeleteAssetAndResourcesAfterGuard 以同一事务完成引用校验、计量与元数据清理，回调不得操作文件。
+func (r *Repository) DeleteAssetAndResourcesAfterGuard(userID string, assetID string, resourceIDs []string, deletionJobs []model.ResourceDeletionJob, beforeDelete func(*gorm.DB) error, expectedStatus ...string) error {
 	expected := ""
 	if len(expectedStatus) > 0 {
 		expected = strings.TrimSpace(expectedStatus[0])
 	}
 	return withImmediateTransaction(r.db, func(tx *gorm.DB) error {
-		var asset model.Asset
-		if err := tx.Where("id = ? AND user_id = ?", assetID, userID).First(&asset).Error; err != nil {
+		if err := guardOwnedAssetDeletion(tx, userID, assetID, resourceIDs, expected); err != nil {
 			return err
 		}
-		if expected != "" && string(asset.Status) != expected {
-			return ErrAssetExpectedStatusMismatch
-		}
-		if err := guardAssetDeletionReferences(tx, userID, assetID, resourceIDs); err != nil {
-			return err
-		}
-		if err := New(tx).RequireNoCanvasHistoryReferences(resourceIDs); err != nil {
-			return err
+		if beforeDelete != nil {
+			if err := guardTaskResourceReferences(tx, userID, resourceIDs, false); err != nil {
+				return err
+			}
+			if err := beforeDelete(tx); err != nil {
+				return err
+			}
 		}
 		versionIDs := tx.Model(&model.AssetVersion{}).Select("id").Where("asset_id = ?", assetID)
 		if err := tx.Where("asset_version_id IN (?)", versionIDs).Delete(&model.ShotAssetReference{}).Error; err != nil {

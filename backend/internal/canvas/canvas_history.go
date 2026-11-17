@@ -31,7 +31,7 @@ func SaveDocumentWithHistoryAndAssets(repo *repository.Repository, before *model
 	var snapshot *model.CanvasSnapshot
 	var resourceIDs []string
 	if before != nil {
-		capture, err := repo.ShouldCaptureCanvasSnapshot(after.ID, before.Revision, cutoff, force)
+		capture, err := repo.ShouldCaptureCanvasSnapshot(after.UserID, after.ID, before.Revision, cutoff, force)
 		if err != nil {
 			return err
 		}
@@ -41,7 +41,7 @@ func SaveDocumentWithHistoryAndAssets(repo *repository.Repository, before *model
 				return err
 			}
 			if !force && len(resourceIDs) > 0 {
-				resourceIDs, err = repo.ReadyResourceIDs(resourceIDs)
+				resourceIDs, err = repo.ReadyResourceIDs(after.UserID, resourceIDs)
 				if err != nil {
 					return err
 				}

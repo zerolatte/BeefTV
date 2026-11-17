@@ -228,6 +228,7 @@ func TestWorkspaceModelConfigCapabilityNormalizesDrafts(t *testing.T) {
 
 func TestRegisterCanvasAPINormalizesInstalledPluginWorkflow(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+	t.Setenv("CANVAS_OFFICIAL_PLUGIN_DIR", buildTestProtocolPackages(t, "autodl-comfyui"))
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	if err != nil {
 		t.Fatal(err)

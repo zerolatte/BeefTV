@@ -19,6 +19,7 @@ type CreateProjectRequest struct {
 }
 
 type UpdateProjectRequest struct {
+	ExpectedRevision  int64   `json:"expectedRevision"`
 	Name              string  `json:"name"`
 	Type              string  `json:"type"`
 	AspectRatio       string  `json:"aspectRatio"`
@@ -40,9 +41,10 @@ type CreateProjectUnitRequest struct {
 }
 
 type UpdateProjectUnitRequest struct {
-	Title      string `json:"title"`
-	SourceText string `json:"sourceText"`
-	Status     string `json:"status"`
+	ExpectedRevision int64  `json:"expectedRevision"`
+	Title            string `json:"title"`
+	SourceText       string `json:"sourceText"`
+	Status           string `json:"status"`
 }
 
 type ImportProjectUnitsRequest struct {
@@ -50,7 +52,14 @@ type ImportProjectUnitsRequest struct {
 }
 
 type ReorderProjectUnitsRequest struct {
-	UnitIDs []string `json:"unitIds"`
+	ExpectedRevision int64    `json:"expectedRevision"`
+	UnitIDs          []string `json:"unitIds"`
+}
+
+// UnitSnapshot 将章节正文与读取它时的项目版本绑定，避免独立请求错配版本。
+type UnitSnapshot struct {
+	Unit            model.ProjectUnit `json:"unit"`
+	ProjectRevision int64             `json:"projectRevision"`
 }
 
 type LinkCanvasUnitRequest struct {
@@ -94,8 +103,9 @@ type Core struct {
 }
 
 type UnitSummaries struct {
-	Units        []model.ProjectUnit `json:"units"`
-	CanvasCounts map[string]int64    `json:"canvasCounts"`
+	Units           []model.ProjectUnit `json:"units"`
+	CanvasCounts    map[string]int64    `json:"canvasCounts"`
+	ProjectRevision int64               `json:"projectRevision"`
 }
 
 type Overview struct {

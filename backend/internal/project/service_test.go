@@ -169,7 +169,7 @@ func TestCreateUpdateAndRevision(t *testing.T) {
 		t.Fatalf("workflow instance count = %d, want 1", workflowCount)
 	}
 
-	updated, err := svc.UpdateProject("user-1", created.ID, UpdateProjectRequest{Name: "短剧一改"})
+	updated, err := svc.UpdateProject("user-1", created.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, created.ID), Name: "短剧一改"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestUpdateProjectCoverRequiresOwnedReadyImage(t *testing.T) {
 		t.Fatal(err)
 	}
 	coverID := "cover-ready"
-	updated, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{CoverResourceID: &coverID})
+	updated, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), CoverResourceID: &coverID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestUpdateProjectCoverRequiresOwnedReadyImage(t *testing.T) {
 		t.Fatalf("updated cover = %+v", updated)
 	}
 	for _, invalidID := range []string{"cover-pending", "cover-video", "cover-other-user", "missing"} {
-		if _, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{CoverResourceID: &invalidID}); err == nil {
+		if _, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), CoverResourceID: &invalidID}); err == nil {
 			t.Fatalf("UpdateProject cover %q succeeded, want validation error", invalidID)
 		}
 	}
@@ -237,7 +237,7 @@ func TestFolderMoveRequiresOwnedFolderAndProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.MoveProjectToFolder("user-1", project.ID, ownFolder.ID); err != nil {
+	if err := svc.MoveProjectToFolder("user-1", project.ID, ownFolder.ID, ownedRevision(t, svc, project.ID)); err != nil {
 		t.Fatal(err)
 	}
 	var stored model.Project
@@ -247,13 +247,13 @@ func TestFolderMoveRequiresOwnedFolderAndProject(t *testing.T) {
 	if stored.FolderID != ownFolder.ID {
 		t.Fatalf("folder id = %q, want %q", stored.FolderID, ownFolder.ID)
 	}
-	if err := svc.MoveProjectToFolder("user-1", project.ID, foreignFolder.ID); !IsNotFound(err) {
+	if err := svc.MoveProjectToFolder("user-1", project.ID, foreignFolder.ID, ownedRevision(t, svc, project.ID)); !IsNotFound(err) {
 		t.Fatalf("move to foreign folder error = %v, want not found", err)
 	}
-	if err := svc.MoveProjectToFolder("user-2", project.ID, ownFolder.ID); !IsNotFound(err) {
+	if err := svc.MoveProjectToFolder("user-2", project.ID, ownFolder.ID, ownedRevision(t, svc, project.ID)); !IsNotFound(err) {
 		t.Fatalf("foreign user move error = %v, want not found", err)
 	}
-	if err := svc.MoveProjectToFolder("user-1", project.ID, ""); err != nil {
+	if err := svc.MoveProjectToFolder("user-1", project.ID, "", ownedRevision(t, svc, project.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.First(&stored, "id = ?", project.ID).Error; err != nil {
@@ -538,13 +538,13 @@ func TestUnitOperationsStayInsideOwnedProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ReorderProjectUnits("user-1", project.ID, ReorderProjectUnitsRequest{UnitIDs: []string{second.ID, first.ID}}); err != nil {
+	if err := svc.ReorderProjectUnits("user-1", project.ID, ReorderProjectUnitsRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), UnitIDs: []string{second.ID, first.ID}}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ReorderProjectUnits("user-1", other.ID, ReorderProjectUnitsRequest{UnitIDs: []string{first.ID}}); err == nil {
+	if err := svc.ReorderProjectUnits("user-1", other.ID, ReorderProjectUnitsRequest{ExpectedRevision: ownedRevision(t, svc, other.ID), UnitIDs: []string{first.ID}}); err == nil {
 		t.Fatal("reordered units onto a different project")
 	}
-	updated, err := svc.UpdateProjectUnit("user-1", project.ID, first.ID, UpdateProjectUnitRequest{Title: "一改", SourceText: "<p>新的正文</p>", Status: string(model.ProjectUnitStatusReady)})
+	updated, err := svc.UpdateProjectUnit("user-1", project.ID, first.ID, UpdateProjectUnitRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), Title: "一改", SourceText: "<p>新的正文</p>", Status: string(model.ProjectUnitStatusReady)})
 	if err != nil {
 		t.Fatal(err)
 	}

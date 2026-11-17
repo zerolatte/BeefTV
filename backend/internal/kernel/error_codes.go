@@ -36,6 +36,7 @@ const (
 	ReasonProjectUnitShotsChanged ErrorReason = "project_unit_shots_changed"
 	ReasonFailedPrecondition      ErrorReason = "failed_precondition"
 	ReasonQuotaExceeded           ErrorReason = "quota_exceeded"
+	ReasonBackupRecoveryRequired  ErrorReason = "backup_recovery_required"
 	ReasonRateLimited             ErrorReason = "rate_limited"
 	ReasonUnavailable             ErrorReason = "unavailable"
 	// ReasonUnsupportedField 表示目标节点类型没有声明这个可编辑字段：

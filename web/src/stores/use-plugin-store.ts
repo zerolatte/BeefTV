@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUserStore } from "@/stores/use-user-store";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { localForageStorageForScope } from "@/lib/localforage-storage";
@@ -149,6 +150,7 @@ export const usePluginStore = create<PluginStore>()(
         }),
         {
             name: PLUGIN_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: createJSONStorage(() => localForageStorageForScope()),
             partialize: (state) => ({ installations: state.installations }),
             onRehydrateStorage: () => (state) => {

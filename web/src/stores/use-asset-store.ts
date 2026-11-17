@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUserStore } from "@/stores/use-user-store";
 import { persist, type PersistStorage, type StorageValue } from "zustand/middleware";
 
 import { nanoid } from "nanoid";
@@ -577,6 +578,25 @@ export function hasActiveAssetStorePersistence() {
     return assetOperations.size > 0 || assetDraftWriteChains.size > 0;
 }
 
+export async function clearAssetStoreMemoryForScope(scope: string) {
+    queuedAssetPersists.delete(scope);
+    await assetDraftWriteChains.get(scope);
+    assetMemoryStates.delete(scope);
+    observedAssetPersists.delete(scope);
+    assetPersistTokens.delete(scope);
+    assetStoreDrafts.delete(scope);
+    assetStoreDraftClocks.delete(scope);
+    hydratedAssetDraftScopes.delete(scope);
+    hydratingAssetDraftScopes.delete(scope);
+    assetDraftWriteChains.delete(scope);
+    assetDraftWriteFailures.delete(scope);
+    for (const key of generationAssetFailures.keys()) if (key.startsWith(`${scope}\0`)) generationAssetFailures.delete(key);
+    if (getActiveUserScope() === scope) {
+        withAssetStorePersistenceSuppressed(() => useAssetStore.setState({ assets: [], hydrated: false }));
+        assetMemoryStates.delete(scope);
+    }
+}
+
 const assetStorage: PersistStorage<AssetStore> = {
     getItem: async (name) => {
         const scope = getActiveUserScope();
@@ -805,6 +825,7 @@ export const useAssetStore = create<AssetStore>()(
         }),
         {
             name: ASSET_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: assetStorage,
             partialize: (state) => ({ assets: state.assets }) as StorageValue<AssetStore>["state"],
             onRehydrateStorage: () => () => {

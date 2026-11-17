@@ -380,6 +380,7 @@ export const useConfigStore = create<ConfigStore>()(
         }),
         {
             name: CONFIG_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: createJSONStorage(() => scopedLocalStorage),
             partialize: (state) => ({ config: configWithoutCachedSecrets(state.config) }),
             merge: (persisted, current) => {

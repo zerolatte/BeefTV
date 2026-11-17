@@ -80,7 +80,11 @@ func (s *Service) recoverExisting(resource *model.Resource, restore ArtifactRest
 	if err != nil {
 		return nil, err
 	}
-	if err := uploadIdentityConflict(resource, artifact.Kind, artifact.MimeType, artifact.Size); err != nil {
+	comparedSize := artifact.Size
+	if _, streaming := s.quota.(StreamingQuota); streaming && (resource.Size == 0 || artifact.Size == 0) {
+		comparedSize = resource.Size
+	}
+	if err := uploadIdentityConflict(resource, artifact.Kind, artifact.MimeType, comparedSize); err != nil {
 		return nil, err
 	}
 	incoming := resource.Status
@@ -233,6 +237,23 @@ func (s *Service) promoteReady(resource *model.Resource, reserve func() (string,
 	if _, _, err := s.ensureReservation(resource.UserID, identity, reserve); err != nil {
 		return resource, err
 	}
+	if quota, ok := s.quota.(StreamingQuota); ok {
+		file, err := s.blobs.Open(resource.ObjectKey)
+		if err != nil {
+			return resource, err
+		}
+		info, statErr := file.Stat()
+		closeErr := file.Close()
+		if err := errors.Join(statErr, closeErr); err != nil {
+			return resource, err
+		}
+		if !info.Mode().IsRegular() {
+			return resource, ResourceMissing()
+		}
+		if err := quota.ReconcileStoredResource(resource, info.Size()); err != nil {
+			return resource, err
+		}
+	}
 	resource.UpdatedAt = time.Now()
 	if err := s.finalizeReady(resource); err != nil {
 		return resource, err
@@ -250,7 +271,7 @@ func applyRecoveredMetadata(resource *model.Resource, artifact RecoveredArtifact
 	if strings.TrimSpace(artifact.MimeType) != "" {
 		resource.MimeType = artifact.MimeType
 	}
-	resource.Size = artifact.Size
+	// 大小由原始身份校验或受控写流给出，不能用上游声明覆盖实际落盘字节。
 	if artifact.Width > 0 {
 		resource.Width = artifact.Width
 	}

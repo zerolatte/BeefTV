@@ -40,6 +40,7 @@ import { runGenerationBeforeSubmitHooks } from "@/lib/plugins/slot-registry";
 import { confirmCanvasGeneration, waitForCanvasPreparation } from "./canvas-generation-preflight";
 import { startOperation } from "@/stores/use-operation-progress";
 import type { CanvasPageUiStoreHook } from "@/stores/canvas/use-canvas-page-ui-store";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 type UseCanvasGenerationExecutorOptions = {
     pageUi: CanvasPageUiStoreHook;
@@ -149,6 +150,7 @@ export function useCanvasGenerationExecutor({
                         message.error(errText);
                     };
                     try {
+                        assertGenerationAvailable();
                         controller.signal.throwIfAborted();
                         const frozen = structuredClone(options?.confirmedInputs ?? { nodes: nodesRef.current, connections: connectionsRef.current, config: effectiveConfig, assets, skills: addedSkills });
                         const inputNodes = frozen.nodes;

@@ -49,7 +49,8 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     }, [pathname]);
 
     useEffect(() => {
-        // A failed read keeps the plugins remembered in this browser.
+        if (!isLocalWorkspaceMode()) return;
+        // 读取失败保留本地已安装插件，平台不初始化插件。
         void syncPluginsFromBackend().catch(() => undefined);
     }, []);
 
@@ -113,7 +114,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
         <ConfigProvider theme={productWorkspace ? workspaceTheme : undefined}>
             <div className={cn("app-user-workspace h-dvh overflow-hidden text-foreground", spatialWorkbench && "app-spatial-workspace", productWorkspace && "app-product-workspace", pathname === "/" && "app-home-route")}>
                 <AppWorkspaceShell>{children}</AppWorkspaceShell>
-                <FirstCreationGuide />
+                {isLocalWorkspaceMode() ? <FirstCreationGuide /> : null}
                 <WorkspaceOperationProgress />
                 <WorkspaceNoticeStack notices={workspaceNotices} />
             </div>

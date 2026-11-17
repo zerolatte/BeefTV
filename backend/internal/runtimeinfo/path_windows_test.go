@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsCanonicalDescriptorIgnoresAppDataShadows(t *testing.T) {
@@ -123,5 +125,47 @@ func TestWindowsCanonicalPathFailsClosedWithoutAbsoluteHome(t *testing.T) {
 		if err := Remove(dataDir); err == nil {
 			t.Fatal("Remove must fail with no canonical root")
 		}
+	}
+}
+
+func TestWindowsWorkspaceAliasesShareLockAndDiscovery(t *testing.T) {
+	directory := filepath.Join(t.TempDir(), "long-workspace-directory")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := filepath.EvalSymlinks(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wide, err := windows.UTF16PtrFromString(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buffer := make([]uint16, 32768)
+	n, err := windows.GetShortPathName(wide, &buffer[0], uint32(len(buffer)))
+	if err != nil || n == 0 || int(n) >= len(buffer) {
+		t.Fatalf("读取目录短路径失败：%v", err)
+	}
+	short := windows.UTF16ToString(buffer[:n])
+	lock, err := LockWorkspace(short)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lock.Close()
+	for _, alias := range []string{canonical, directory, strings.ToUpper(canonical)} {
+		if duplicate, err := LockWorkspace(alias); err == nil {
+			_ = duplicate.Close()
+			t.Fatalf("目录别名绕过已有实例锁：%s", alias)
+		}
+	}
+	if err := Write(short, "http://127.0.0.1:53211/api", "alias-fixture"); err != nil {
+		t.Fatal(err)
+	}
+	defer Remove(short)
+	if info, found := Discover(canonical); !found || info.Version != "alias-fixture" {
+		t.Fatalf("长路径无法发现短路径写入的运行时：%+v", info)
+	}
+	if testPath(t, filepath.Join(short, "future")) != testPath(t, filepath.Join(canonical, "future")) {
+		t.Fatal("尚未创建的子目录通过父目录别名产生不同身份")
 	}
 }

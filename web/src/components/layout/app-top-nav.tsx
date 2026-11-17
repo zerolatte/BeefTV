@@ -20,10 +20,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
     const [desktopSidebarCollapsed, setDesktopSidebarCollapsed] = useState(readWorkspaceSidebarCollapsed);
     const [paletteOpen, setPaletteOpen] = useState(false);
     const sessionHydrated = useUserStore((state) => state.hydrated);
-    const storageMode = useUserStore((state) => state.storageMode);
-    const user = useUserStore((state) => state.user);
-    const localMode = isLocalWorkspaceMode() || storageMode === "local" || user?.username === "local";
-    useDesktopUpdateBootstrap();
+    const localMode = isLocalWorkspaceMode();
 
     const hideChrome = pathname.startsWith("/admin") || /^\/canvas\/[^/]+/.test(pathname);
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
@@ -82,6 +79,7 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
 
     return (
         <>
+            {localMode ? <LocalDesktopUpdateBootstrap /> : null}
             <div className={cn("app-workspace-shell flex h-dvh min-h-0 w-full flex-col overflow-hidden", spatialWorkbench && "is-spatial", creationWorkspace && "is-creation-workspace")}>
                 {!hideChrome && mobileSidebarExpanded ? <button type="button" className="app-workspace-sidebar-scrim lg:hidden" aria-label="收起侧栏" onClick={() => setMobileSidebarExpanded(false)} /> : null}
 
@@ -116,7 +114,12 @@ export function AppWorkspaceShell({ children }: { children: ReactNode }) {
 
                 {paletteOpen ? <Suspense fallback={null}><WorkspaceCommandPalette open onClose={() => setPaletteOpen(false)} /></Suspense> : null}
             </div>
-            <ModelSetupGuide hidden={!sessionHydrated || localMode || pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin") || pathname.startsWith("/assets")} />
+            {localMode ? <ModelSetupGuide hidden={!sessionHydrated || localMode || pathname === "/login" || pathname === "/register" || pathname.startsWith("/admin") || pathname.startsWith("/assets")} /> : null}
         </>
     );
+}
+
+function LocalDesktopUpdateBootstrap() {
+    useDesktopUpdateBootstrap();
+    return null;
 }

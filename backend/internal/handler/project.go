@@ -6,17 +6,16 @@ import (
 	"strconv"
 	"strings"
 
-	"infinite-canvas/backend/internal/app"
 	localproject "infinite-canvas/backend/internal/project"
+	"infinite-canvas/backend/internal/projectread"
 
 	"github.com/gin-gonic/gin"
 )
 
-// projectReads are the two project views that also include task summaries;
-// app keeps that cross-domain assembly.
+// projectReads 由共享读取领域组合项目与任务视图。
 type projectReads interface {
-	ProjectDetail(string, string) (app.ProjectDetail, error)
-	ProjectUnitWorkspace(string, string, string) (app.ProjectUnitWorkspace, error)
+	ProjectDetail(string, string) (projectread.Detail, error)
+	ProjectUnitWorkspace(string, string, string) (projectread.UnitWorkspace, error)
 }
 
 // RegisterProjectRoutes serves short-drama projects from the project domain.
@@ -142,13 +141,14 @@ func RegisterProjectRoutes(r *gin.RouterGroup, owners workspaceOwners, projects 
 			return
 		}
 		var req struct {
-			FolderID string `json:"folderId"`
+			FolderID         string `json:"folderId"`
+			ExpectedRevision int64  `json:"expectedRevision"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
 			fail(c, http.StatusBadRequest, err)
 			return
 		}
-		if err := projects.MoveProjectToFolder(user.ID, c.Param("id"), req.FolderID); err != nil {
+		if err := projects.MoveProjectToFolder(user.ID, c.Param("id"), req.FolderID, req.ExpectedRevision); err != nil {
 			if localproject.IsNotFound(err) {
 				fail(c, http.StatusNotFound, err)
 				return
@@ -286,7 +286,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, owners workspaceOwners, projects 
 			failService(c, err)
 			return
 		}
-		unit, err := projects.GetProjectUnit(user.ID, c.Param("id"), c.Param("unitId"))
+		snapshot, err := projects.GetProjectUnitSnapshot(user.ID, c.Param("id"), c.Param("unitId"))
 		if err != nil {
 			if localproject.IsNotFound(err) {
 				fail(c, http.StatusNotFound, err)
@@ -295,7 +295,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, owners workspaceOwners, projects 
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"unit": unit})
+		ok(c, snapshot)
 	})
 	r.GET("/projects/:id/units/:unitId/workspace", func(c *gin.Context) {
 		user, err := currentUser(c, owners)
@@ -381,7 +381,7 @@ func RegisterProjectRoutes(r *gin.RouterGroup, owners workspaceOwners, projects 
 			failService(c, err)
 			return
 		}
-		ok(c, gin.H{"unit": unit})
+		ok(c, localproject.UnitSnapshot{Unit: unit, ProjectRevision: req.ExpectedRevision + 1})
 	})
 	r.DELETE("/projects/:id/units/:unitId", func(c *gin.Context) {
 		user, err := currentUser(c, owners)

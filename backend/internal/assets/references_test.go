@@ -13,6 +13,8 @@ func TestReferenceCollectorsPreserveScalarAndNestedLocators(t *testing.T) {
 		{`{"prompt":"resource:ignored","nested":{"resourceIds":["first","second"],"content":"/api/resources/first/file"}}`, "first,second"},
 		{`{"nodes":[{"metadata":{"storageKey":"resource:ab1e3cd"}}],"prompt":"escaped \\\" 1e1000"}`, "ab1e3cd"},
 		{`{"resourceId":"media","custom":1e2}`, "media"},
+		{`{"coverResourceId":"cover","previewResourceId":"preview","renderResourceId":"render","snapshot":{"files":{"image":{"dataURL":"/api/resources/drawing/file"}}},"metadata":{"description":"resource:ignored","prompt":"/api/resources/ignored/file"}}`, "cover,drawing,preview,render"},
+		{`{"dataURL":"data:image/png;base64,abcd","description":"resource:ignored","arbitraryId":"ignored"}`, ""},
 	} {
 		t.Run(tc.raw, func(t *testing.T) {
 			var decoded any

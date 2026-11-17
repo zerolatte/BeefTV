@@ -3,6 +3,7 @@ import { getRegisteredPlugin, listRegisteredPlugins } from "@/lib/plugins/plugin
 import type { BeefTVPluginHost, PluginManifest, PluginManifestV2 } from "@/lib/plugins/plugin-types";
 import { disposePluginContributions } from "@/lib/plugins/slot-registry";
 import { reportPluginLoadError } from "@/services/api/plugins";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
 import {
     isPluginEffectivelyEnabled,
     onPluginStoreLifecycleChange,
@@ -273,6 +274,10 @@ export function activateRegisteredSetupSync(pluginId: string): boolean {
 }
 
 export function syncActiveClientPlugins(changedPluginId?: string): void {
+    if (!isLocalWorkspaceMode()) {
+        deactivateAllClientPlugins();
+        return;
+    }
     const storeState = usePluginStore.getState();
     const installationsById = new Map(storeState.installations.map((inst) => [inst.manifest.id, inst]));
 

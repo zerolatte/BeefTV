@@ -11,7 +11,7 @@ import (
 // Legacy descriptors are used only to refuse an operation, never to discover
 // an address. A live AppData shadow can therefore block an unsafe operation
 // without redirecting the CLI to a different workspace.
-func LockWorkspace(dataDir string) (*os.File, error) {
+func LockWorkspace(dataDir string) (*WorkspaceLock, error) {
 	lock, err := lockWorkspaceFile(dataDir)
 	if err != nil {
 		return nil, err

@@ -58,7 +58,14 @@ func (r *Repository) UpsertCanvasLibraryFolder(folder *model.CanvasLibraryFolder
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
-		return r.db.Create(folder).Error
+		created := r.db.Clauses(clause.OnConflict{DoNothing: true}).Create(folder)
+		if created.Error != nil {
+			return created.Error
+		}
+		if created.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
 	}
 	if existing.TombstonedAt != nil {
 		return ErrCanvasLibraryFolderDeleted

@@ -203,7 +203,8 @@ func TestLibraryRejectsForeignAndAcceptsOwnedResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = lib.UpsertUserAsset("owner", foreignRaw)
-	if err == nil || !strings.Contains(err.Error(), "不存在或不属于当前用户") {
+	var appErr *kernel.AppError
+	if !errors.As(err, &appErr) || appErr.Status != 404 {
 		t.Fatalf("foreign resource error = %v", err)
 	}
 	if _, err := lib.repo.AssetForUser("owner", "asset-foreign"); !errors.Is(err, gorm.ErrRecordNotFound) {

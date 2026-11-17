@@ -231,7 +231,7 @@ func TestArchivedProjectRejectsUnitAndLinkMutations(t *testing.T) {
 	if _, err := svc.CreateProjectUnit("user-1", archived.ID, CreateProjectUnitRequest{Title: "新章"}); err == nil {
 		t.Fatal("created unit on archived project")
 	}
-	if _, err := svc.UpdateProjectUnit("user-1", archived.ID, unit.ID, UpdateProjectUnitRequest{Title: "改"}); err == nil {
+	if _, err := svc.UpdateProjectUnit("user-1", archived.ID, unit.ID, UpdateProjectUnitRequest{ExpectedRevision: ownedRevision(t, svc, archived.ID), Title: "改"}); err == nil {
 		t.Fatal("updated unit on archived project")
 	}
 	if err := svc.DeleteProjectUnit("user-1", archived.ID, unit.ID); err == nil {
@@ -250,7 +250,7 @@ func TestArchivedProjectRejectsUnitAndLinkMutations(t *testing.T) {
 	if got.ID != unit.ID {
 		t.Fatalf("read archived unit = %+v", got)
 	}
-	active, err := svc.UpdateProject("user-1", archived.ID, UpdateProjectRequest{Status: string(model.ProjectStatusActive)})
+	active, err := svc.UpdateProject("user-1", archived.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, archived.ID), Status: string(model.ProjectStatusActive)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestMoveProjectIncrementsRevision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.MoveProjectToFolder("user-1", project.ID, folder.ID); err != nil {
+	if err := svc.MoveProjectToFolder("user-1", project.ID, folder.ID, ownedRevision(t, svc, project.ID)); err != nil {
 		t.Fatal(err)
 	}
 	var stored model.Project
@@ -276,7 +276,7 @@ func TestMoveProjectIncrementsRevision(t *testing.T) {
 	if stored.FolderID != folder.ID || stored.Revision != 2 {
 		t.Fatalf("moved = %+v", stored)
 	}
-	if err := svc.MoveProjectToFolder("user-1", project.ID, ""); err != nil {
+	if err := svc.MoveProjectToFolder("user-1", project.ID, "", ownedRevision(t, svc, project.ID)); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.First(&stored, "id = ?", project.ID).Error; err != nil {
@@ -296,7 +296,7 @@ func TestUpdateProjectCASRejectsStaleAndConcurrentWrites(t *testing.T) {
 	}
 	sqlDB.SetMaxOpenConns(1)
 
-	updated, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{Name: "短剧改"})
+	updated, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), Name: "短剧改"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,7 +408,7 @@ func TestUpdateProjectConflictIsTyped(t *testing.T) {
 		t.Fatalf("mapped conflict = %v", err)
 	}
 	var appErr *kernel.AppError
-	if !errors.As(err, &appErr) || appErr.Message != "项目已被其他操作更新，请重新加载后再保存" {
+	if !errors.As(err, &appErr) || appErr.Reason != "revision_conflict" {
 		t.Fatalf("conflict message = %#v", appErr)
 	}
 }

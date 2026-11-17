@@ -5,12 +5,10 @@ import { App } from "antd";
 import { createModelChannel, useConfigStore } from "@/stores/use-config-store";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { initializeClientDiagnostics, setDiagnosticUserScope } from "@/services/diagnostics/client-diagnostics";
-import { fetchPluginRuntimeState, setUserPluginEnabled } from "@/services/api/plugins";
 import { usePluginStore } from "@/stores/use-plugin-store";
 import { useAssetStore } from "@/stores/use-asset-store";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useUserStore } from "@/stores/use-user-store";
-import { appQueryClient } from "@/lib/query-client";
 import { isLocalWorkspaceMode } from "@/services/workspace-mode";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { confirmDesktopUpdateStartup } from "@/services/desktop-update-startup";
@@ -21,19 +19,14 @@ import { appHref } from "@/lib/app-routing";
 export function ClientRootInit({ children }: { children: ReactNode }) {
     const config = useConfigStore((state) => state.config);
     const userId = useUserStore((state) => state.user?.id || "");
-    const storageMode = useUserStore((state) => state.storageMode);
-    const user = useUserStore((state) => state.user);
     const assetsHydrated = useAssetStore((state) => state.hydrated);
     const canvasHydrated = useCanvasStore((state) => state.hydrated);
-    const localMode = isLocalWorkspaceMode() || storageMode === "local" || user?.username === "local";
+    const localMode = isLocalWorkspaceMode();
     const bootSnapshot = useSyncExternalStore(subscribeDesktopBootSnapshot, getDesktopBootSnapshot, getDesktopBootSnapshot);
     const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
     const { message } = App.useApp();
     const handledConfigParams = useRef(false);
     const updateConfig = useConfigStore((state) => state.updateConfig);
-    const setRuntimeStatuses = usePluginStore((state) => state.setRuntimeStatuses);
-    const setPluginStates = usePluginStore((state) => state.setPluginStates);
-    const pluginStoreHydrated = usePluginStore((state) => state.hydrated);
     const localMediaCleanupScope = useRef("");
     const updateStartupConfirmed = useRef(false);
     const environmentScope = useRef("");
@@ -45,6 +38,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
     }, [bootSnapshot.transportMode]);
 
     useEffect(() => {
+        if (!localMode) return;
         let stopped = false, pending = false;
         const read = async () => {
             const consume = getDesktopAppBinding()?.ConsumeSkillLink;
@@ -58,7 +52,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         const timer = window.setInterval(() => void read().catch(() => {}), 1000);
         void read().catch(() => {});
         return () => { stopped = true; clearInterval(timer); };
-    }, [userId]);
+    }, [localMode, userId]);
 
     useEffect(() => {
         if (!userId || !localMode || environmentScope.current === userId) return;
@@ -92,41 +86,6 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         usePluginStore.getState().setRuntimeStatuses({});
         usePluginStore.getState().setPluginStates({});
     }, []);
-
-    useEffect(() => {
-        if (!userId || localMode || !pluginStoreHydrated) return;
-        let cancelled = false;
-        void appQueryClient.fetchQuery({ queryKey: ["plugin-runtime", userId], queryFn: fetchPluginRuntimeState, staleTime: 30_000 })
-            .then(async (runtime) => {
-                if (cancelled || useUserStore.getState().user?.id !== userId) return;
-                const states = { ...runtime.states };
-                const legacyEnabledIds = usePluginStore
-                    .getState()
-                    .installations.filter((installation) => installation.enabled && states[installation.manifest.id]?.canToggle && !states[installation.manifest.id]?.userConfigured)
-                    .map((installation) => installation.manifest.id);
-                if (legacyEnabledIds.length) {
-                    try {
-                        const migrated = await Promise.all(legacyEnabledIds.map((pluginId) => setUserPluginEnabled(pluginId, true)));
-                        for (const state of migrated) states[state.pluginId] = state;
-                    } catch (error) {
-                        console.warn("迁移用户插件启用状态失败，已保留服务端状态", error);
-                    }
-                }
-                if (!cancelled && useUserStore.getState().user?.id === userId) {
-                    setRuntimeStatuses({});
-                    setPluginStates(states);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setRuntimeStatuses({});
-                    setPluginStates({});
-                }
-            });
-        return () => {
-            cancelled = true;
-        };
-    }, [localMode, pluginStoreHydrated, setPluginStates, setRuntimeStatuses, userId]);
 
     useEffect(() => {
         initializeClientDiagnostics();
@@ -174,6 +133,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         searchParams.delete("apiKey");
         searchParams.delete("apikey");
         window.history.replaceState(null, "", `${window.location.pathname}${searchParams.size ? `?${searchParams}` : ""}${window.location.hash}`);
+        if (!localMode) return;
         const firstChannel = config.channels[0];
         updateConfig(
             "channels",
@@ -192,7 +152,7 @@ export function ClientRootInit({ children }: { children: ReactNode }) {
         navigateToSettings({ section: "channels" });
         if (ignoredApiKey) message.warning("出于安全考虑，链接中的 API Key 已忽略，请在配置中手动填写");
         else message.success("已导入本地直连地址");
-    }, [config.channels, message, updateConfig]);
+    }, [config.channels, localMode, message, updateConfig]);
 
     return (
         <>

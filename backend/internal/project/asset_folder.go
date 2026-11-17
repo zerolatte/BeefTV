@@ -6,6 +6,8 @@ import (
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+
+	"gorm.io/gorm"
 )
 
 const projectAssetFolderMaxDepth = 8
@@ -127,7 +129,7 @@ func (s *Service) resolveAssetFolderID(projectID string, requested *string) (str
 	}
 	folderID := strings.TrimSpace(*requested)
 	if _, err := s.repo.ProjectAssetFolder(projectID, folderID); err != nil {
-		return "", kernel.BadAuthRequest("目标文件夹不存在或不属于当前素材库")
+		return "", err
 	}
 	return folderID, nil
 }
@@ -199,7 +201,7 @@ func validateProjectAssetFolderParent(folders []model.ProjectAssetFolder, folder
 		seen[currentID] = struct{}{}
 		current, ok := byID[currentID]
 		if !ok {
-			return kernel.BadAuthRequest("父文件夹不存在或不属于当前项目")
+			return gorm.ErrRecordNotFound
 		}
 		ancestorDepth++
 		currentID = current.ParentID

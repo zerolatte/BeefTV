@@ -3,6 +3,7 @@ package canvasworkflow
 import (
 	"fmt"
 	"regexp"
+	"sort"
 )
 
 var nodeMentionPattern = regexp.MustCompile(`@\[node:([^\]\s]+)\]`)
@@ -25,7 +26,7 @@ func MediaField(kind string) string {
 
 // Names are presentation only. Bind stable node identities to the provider's
 // actual reference slots, without exposing that numbering in the editor.
-func nodePromptBindings(prompt string, bindings []Binding, nodes map[string]Node, edges []Edge, target string) ([]Binding, error) {
+func NodePromptBindings(prompt string, bindings []Binding, nodes map[string]Node, edges []Edge, target string) ([]Binding, error) {
 	var mentions []Binding
 	for _, match := range nodeMentionPattern.FindAllStringSubmatchIndex(prompt, -1) {
 		id := prompt[match[2]:match[3]]
@@ -61,4 +62,31 @@ func nodePromptBindings(prompt string, bindings []Binding, nodes map[string]Node
 		mentions = append(mentions, binding)
 	}
 	return mentions, nil
+}
+
+// RenderPromptBindings 按原始位置一次替换，输入文本中的其他占位符不会触发二次替换。
+func RenderPromptBindings(prompt string, bindings []Binding, steps map[string]*Step) (string, error) {
+	ordered := append([]Binding(nil), bindings...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].Index > ordered[j].Index })
+	previous := len(prompt) + 1
+	for _, binding := range ordered {
+		if !PromptBinding(binding.Field) {
+			continue
+		}
+		value := steps[binding.NodeID]
+		if value == nil || value.Status != "succeeded" {
+			return "", BadRequest("执行步骤的输入尚未就绪")
+		}
+		end := binding.Index + len(binding.Original)
+		if binding.Index < 0 || end > len(prompt) || end > previous || prompt[binding.Index:end] != binding.Original {
+			return "", BadRequest("提示词变量位置失效，请重新保存工作流")
+		}
+		replacement := value.Text
+		if binding.Field == "promptMention" {
+			replacement = binding.ReferenceLabel
+		}
+		prompt = prompt[:binding.Index] + replacement + prompt[end:]
+		previous = binding.Index
+	}
+	return prompt, nil
 }

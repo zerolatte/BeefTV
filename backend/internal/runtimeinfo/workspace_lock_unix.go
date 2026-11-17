@@ -7,4 +7,10 @@ import (
 	"os"
 )
 
-func lockWorkspaceFile(dataDir string) (*os.File, error) { return desktopstorage.Lock(dataDir) }
+func lockWorkspaceFile(dataDir string) (*WorkspaceLock, error) {
+	file, err := desktopstorage.Lock(dataDir)
+	if err != nil {
+		return nil, err
+	}
+	return &WorkspaceLock{files: []*os.File{file}}, nil
+}

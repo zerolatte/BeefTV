@@ -525,7 +525,7 @@ func TestUpdateChapterSourceInvalidatesAllUnitArtifacts(t *testing.T) {
 	if err := db.Create(&artifact).Error; err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.ProjectService().UpdateProjectUnit("user-1", project.ID, unit.ID, UpdateProjectUnitRequest{Title: unit.Title, SourceText: "修改后的章节正文"}); err != nil {
+	if _, err := service.ProjectService().UpdateProjectUnit("user-1", project.ID, unit.ID, UpdateProjectUnitRequest{ExpectedRevision: workflowProjectRevision(t, db, project.ID), Title: unit.Title, SourceText: "修改后的章节正文"}); err != nil {
 		t.Fatal(err)
 	}
 	var storedArtifact model.ShotArtifact

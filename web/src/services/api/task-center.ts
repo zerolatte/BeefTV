@@ -7,6 +7,7 @@ import { getDiagnosticTraceId, recordDiagnosticEvent } from "@/services/diagnost
 import { isDesktopStreamingAvailable } from "@/services/workspace-startup-state";
 import { publishGenerationDeliveryProgress } from "@/stores/use-generation-delivery-progress";
 import { beginTaskReferenceObservation, publishTaskReferenceProgress } from "@/services/task-reference-progress";
+import { assertClientTextExecutionAvailable, assertGenerationAvailable } from "@/services/generation-availability";
 
 export type { BackendEnvelope } from "@/services/api/request";
 
@@ -138,6 +139,7 @@ export type CreateTaskInput = {
     input?: Record<string, unknown>;
 };
 export function createGenerationTask(input: CreateTaskInput, config?: HttpRequestConfig) {
+    assertGenerationAvailable();
     return http.post<GenerationTask>("/tasks", input, config).then((task) => {
         recordDiagnosticEvent({ level: "info", category: "task", code: "task_created", message: "任务已创建", taskId: task.id, projectId: task.projectId, canvasId: task.projectId, nodeId: task.clientContext?.nodeId, clientOperationId: task.clientOperationId, traceId: task.traceId || getDiagnosticTraceId(task.id) });
         notifyCanvasTaskCreated(task);
@@ -364,10 +366,12 @@ export function subscribeGenerationTasks(ids: readonly string[], listener: (task
 }
 
 export function appendTaskTextDelta(id: string, content: string) {
+    assertClientTextExecutionAvailable();
     return http.post<TaskTextDelta>(`/tasks/${encodeURIComponent(id)}/text-deltas`, { content });
 }
 
 export function completeTextReplayTask(id: string, text: string) {
+    assertClientTextExecutionAvailable();
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/text-replay-complete`, { text });
 }
 
@@ -376,6 +380,7 @@ export function queryTaskTextReplay(id: string, after = 0) {
 }
 
 export function retryGenerationTask(id: string, options?: { signal?: AbortSignal }) {
+    assertGenerationAvailable();
     return http.post<GenerationTask>(`/tasks/${encodeURIComponent(id)}/retry`, undefined, options);
 }
 

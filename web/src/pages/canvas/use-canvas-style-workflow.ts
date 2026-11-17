@@ -14,6 +14,8 @@ type UseCanvasStyleWorkflowOptions = {
     pageUi: CanvasPageUiStoreHook;
     canvasId: string;
     domainProjectId?: string;
+    domainProjectRevision?: number;
+    stylePickerOpen: boolean;
     nodesRef: { current: CanvasNodeData[] };
     selectedNodeIdsRef: { current: Set<string> };
     getCanvasCenter: () => Position;
@@ -21,12 +23,19 @@ type UseCanvasStyleWorkflowOptions = {
     setStylePickerOpen: Dispatch<SetStateAction<boolean>>;
 };
 
-export function useCanvasStyleWorkflow({pageUi,  canvasId, domainProjectId, nodesRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setStylePickerOpen }: UseCanvasStyleWorkflowOptions) {
+export function useCanvasStyleWorkflow({pageUi,  canvasId, domainProjectId, domainProjectRevision, stylePickerOpen, nodesRef, selectedNodeIdsRef, getCanvasCenter, setNodes, setStylePickerOpen }: UseCanvasStyleWorkflowOptions) {
     const { message } = App.useApp();
     const queryClient = useQueryClient();
     const liveContext = useRef({ canvasId, domainProjectId, mounted: true });
     liveContext.current = { canvasId, domainProjectId, mounted: liveContext.current.mounted };
     const applyingRef = useRef(false);
+    const pickerBase = useRef({ open: false, projectId: domainProjectId, revision: domainProjectRevision });
+    useEffect(() => {
+        // 画风选择期间保留打开时版本，后台项目刷新不替换编辑基准。
+        if (!stylePickerOpen || !pickerBase.current.open || pickerBase.current.projectId !== domainProjectId) {
+            pickerBase.current = { open: stylePickerOpen, projectId: domainProjectId, revision: domainProjectRevision };
+        }
+    }, [domainProjectId, domainProjectRevision, stylePickerOpen]);
     useEffect(() => { liveContext.current.mounted = true; return () => { liveContext.current.mounted = false; }; }, []);
 
     const applyCanvasStyle = useCallback(
@@ -69,7 +78,9 @@ export function useCanvasStyleWorkflow({pageUi,  canvasId, domainProjectId, node
     const persistStyleMutation = useMutation({
         mutationFn: ({ preset, profileJson }: { preset: CanvasStylePreset; profileJson: string }) => {
             if (!domainProjectId) throw new Error("画布尚未关联项目");
-            return updateDomainProject(domainProjectId, { stylePresetId: preset.id, styleProfileJson: profileJson });
+            const expectedRevision = stylePickerOpen ? pickerBase.current.revision : domainProjectRevision;
+            if (!expectedRevision) throw new Error("项目版本尚未加载，请重新打开画风选择器");
+            return updateDomainProject(domainProjectId, { expectedRevision, stylePresetId: preset.id, styleProfileJson: profileJson });
         },
     });
 

@@ -7,6 +7,8 @@ import (
 
 	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
+
+	"gorm.io/gorm"
 )
 
 func (s *Service) LinkCanvasUnit(userID string, projectID string, req LinkCanvasUnitRequest) (model.CanvasUnitLink, error) {
@@ -50,7 +52,7 @@ func (s *Service) UnlinkCanvasUnit(userID string, projectID string, canvasID str
 		return err
 	}
 	if canvas.ProjectID != projectID {
-		return kernel.BadAuthRequest("画布不属于当前项目")
+		return gorm.ErrRecordNotFound
 	}
 	if _, err := s.repo.CanvasUnitLink(projectID, canvas.ID, strings.TrimSpace(unitID)); err != nil {
 		return err
@@ -67,7 +69,7 @@ func (s *Service) UnlinkCanvasProject(userID string, projectID string, canvasID 
 		return err
 	}
 	if canvas.ProjectID != projectID {
-		return kernel.BadAuthRequest("画布不属于当前项目")
+		return gorm.ErrRecordNotFound
 	}
 	now := time.Now()
 	payloadJSON, err := canvasPayloadWithoutProject(canvas.PayloadJSON, now)

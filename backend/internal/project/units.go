@@ -23,14 +23,13 @@ func (s *Service) CreateProjectUnit(userID string, projectID string, req CreateP
 }
 
 func (s *Service) GetProjectUnit(userID string, projectID string, unitID string) (model.ProjectUnit, error) {
-	if _, err := s.Owned(userID, projectID); err != nil {
-		return model.ProjectUnit{}, err
-	}
-	unit, err := s.repo.ProjectUnit(projectID, strings.TrimSpace(unitID))
-	if err != nil {
-		return model.ProjectUnit{}, err
-	}
-	return *unit, nil
+	snapshot, err := s.GetProjectUnitSnapshot(userID, projectID, unitID)
+	return snapshot.Unit, err
+}
+
+func (s *Service) GetProjectUnitSnapshot(userID, projectID, unitID string) (UnitSnapshot, error) {
+	unit, revision, err := s.repo.ProjectUnitSnapshot(userID, projectID, strings.TrimSpace(unitID))
+	return UnitSnapshot{Unit: unit, ProjectRevision: revision}, err
 }
 
 func (s *Service) ImportProjectUnits(userID string, projectID string, req ImportProjectUnitsRequest) ([]model.ProjectUnit, error) {
@@ -59,7 +58,11 @@ func (s *Service) ImportProjectUnits(userID string, projectID string, req Import
 }
 
 func (s *Service) ReorderProjectUnits(userID string, projectID string, req ReorderProjectUnitsRequest) error {
-	if _, err := s.Active(userID, projectID); err != nil {
+	current, err := s.Active(userID, projectID)
+	if err != nil {
+		return err
+	}
+	if err := requireExpectedRevision(req.ExpectedRevision, current.Revision); err != nil {
 		return err
 	}
 	units, err := s.repo.ProjectUnits(projectID)
@@ -86,7 +89,7 @@ func (s *Service) ReorderProjectUnits(userID string, projectID string, req Reord
 		seen[id] = struct{}{}
 		normalizedIDs = append(normalizedIDs, id)
 	}
-	return mapProjectWriteError(s.repo.ReorderProjectUnitsActive(userID, projectID, normalizedIDs))
+	return mapProjectWriteError(s.repo.ReorderProjectUnitsActive(userID, projectID, normalizedIDs, req.ExpectedRevision))
 }
 
 func (s *Service) DeleteProjectUnit(userID string, projectID string, unitID string) error {
@@ -132,6 +135,9 @@ func (s *Service) UpdateProjectUnit(userID string, projectID string, unitID stri
 	if err != nil {
 		return model.ProjectUnit{}, err
 	}
+	if err := requireExpectedRevision(req.ExpectedRevision, project.Revision); err != nil {
+		return model.ProjectUnit{}, err
+	}
 	sourceChanged := unit.SourceText != req.SourceText
 	if title := strings.TrimSpace(req.Title); title != "" {
 		unit.Title = title
@@ -145,7 +151,7 @@ func (s *Service) UpdateProjectUnit(userID string, projectID string, unitID stri
 		unit.Status = status
 	}
 	unit.UpdatedAt = time.Now()
-	if err := s.repo.UpdateProjectUnitActive(userID, project.Revision, unit, sourceChanged); err != nil {
+	if err := s.repo.UpdateProjectUnitActive(userID, req.ExpectedRevision, unit, sourceChanged); err != nil {
 		return model.ProjectUnit{}, mapProjectWriteError(err)
 	}
 	return *unit, nil

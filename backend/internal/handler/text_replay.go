@@ -25,26 +25,12 @@ type textReplayAPI interface {
 }
 
 func registerTaskTextReplayRoutes(r *gin.RouterGroup, owners workspaceOwners, replay textReplayAPI) {
-	r.POST("/tasks/:id/text-deltas", func(c *gin.Context) {
-		user, err := currentUser(c, owners)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		var req struct {
-			Content string `json:"content"`
-		}
-		if err := c.ShouldBindJSON(&req); err != nil {
-			fail(c, http.StatusBadRequest, err)
-			return
-		}
-		item, err := requestTextReplay(c, replay).Append(user.ID, c.Param("id"), req.Content)
-		if err != nil {
-			failService(c, err)
-			return
-		}
-		ok(c, item)
-	})
+	registerTaskTextReadRoutes(r, owners, replay)
+	registerTaskTextWriteRoutes(r, owners, replay)
+}
+
+// 平台仅注册读取分支，文本增量和完成状态只由服务端 worker 写入。
+func registerTaskTextReadRoutes(r *gin.RouterGroup, owners workspaceOwners, replay textReplayAPI) {
 	r.GET("/tasks/:id/text-deltas", func(c *gin.Context) {
 		user, err := currentUser(c, owners)
 		if err != nil {
@@ -81,6 +67,29 @@ func registerTaskTextReplayRoutes(r *gin.RouterGroup, owners workspaceOwners, re
 			return
 		}
 		streamTaskTextEvents(c, replayAPI, user.ID, c.Param("id"), after, initial)
+	})
+}
+
+func registerTaskTextWriteRoutes(r *gin.RouterGroup, owners workspaceOwners, replay textReplayAPI) {
+	r.POST("/tasks/:id/text-deltas", func(c *gin.Context) {
+		user, err := currentUser(c, owners)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		var req struct {
+			Content string `json:"content"`
+		}
+		if err := c.ShouldBindJSON(&req); err != nil {
+			fail(c, http.StatusBadRequest, err)
+			return
+		}
+		item, err := requestTextReplay(c, replay).Append(user.ID, c.Param("id"), req.Content)
+		if err != nil {
+			failService(c, err)
+			return
+		}
+		ok(c, item)
 	})
 	r.POST("/tasks/:id/text-replay-complete", func(c *gin.Context) {
 		user, err := currentUser(c, owners)

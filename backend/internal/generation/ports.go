@@ -92,6 +92,12 @@ type ReceiptPort interface {
 	SyncProgress(taskID string, body []byte)
 }
 
+// DispatchAdmissionPort 在生成请求实际发送前持久化执行意图。
+// 适配器绑定服务端冻结的意图与凭据版本；不得从客户端输入构造新的收费身份。
+type DispatchAdmissionPort interface {
+	BeforeDispatch(ctx context.Context, call CallMeta) error
+}
+
 // StagePort reports execution stages without inventing provider progress.
 // The adapter owns task identity and lease fencing.
 type StagePort interface {
@@ -172,6 +178,7 @@ type Runtime struct {
 	Resources         ResourcePort
 	Limits            LimitsPort
 	Receipts          ReceiptPort
+	DispatchAdmission DispatchAdmissionPort
 	Stages            StagePort
 	Delivery          DeliveryProgressPort
 	DownloadCache     VideoDownloadCachePort

@@ -80,12 +80,14 @@ type Output struct {
 	Text       string `json:"text,omitempty"`
 }
 type Run struct {
+	retryRequests    map[string]retryReceipt
 	TemplateRevision int       `json:"templateRevision"`
 	ID               string    `json:"id"`
 	TemplateID       string    `json:"templateId"`
 	TemplateName     string    `json:"templateName"`
 	Status           string    `json:"status"`
 	Error            string    `json:"error,omitempty"`
+	Reason           string    `json:"reason,omitempty"`
 	Steps            []Step    `json:"steps"`
 	Outputs          []Output  `json:"outputs"`
 	CreatedAt        time.Time `json:"createdAt"`

@@ -1,7 +1,8 @@
 import { nanoid } from "nanoid";
 import { LocalImageUnavailableError } from "@/lib/local-image-unavailable";
 import { readImageMeta } from "@/lib/image-utils";
-import { IMAGE_FILES_STORE_NAME, localForageInstance } from "@/lib/localforage-storage";
+import { IMAGE_FILES_STORE_NAME, localForageInstance, localForageKeyBelongsToScope } from "@/lib/localforage-storage";
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from "@/services/workspace-session";
 import { isLocalRuntimeMode } from "@/lib/runtime-mode";
 import { getActiveUserScope } from "@/lib/user-scope";
 import { importResourceFromUrl, isResourceUrl, ownedResourceStorageKey, renderableMediaUrl, resourceFileUrl, resourceIdFromStorageKey, resourceStorageKey, resolveResourceUrl, ResourceUploadError, uploadResourceFile } from "@/services/api/resources";
@@ -112,6 +113,7 @@ function shouldImportRemoteImage(input: string) {
 }
 
 export async function resolveImageUrl(storageKey?: string, fallback = "", options?: { cacheMiss?: boolean; renderable?: boolean }) {
+    const session = captureWorkspaceSession();
     const fallbackUrl = resolveEmbeddedAssetUrl(resolveResourceUrl(undefined, fallback));
     const safeFallbackUrl = options?.renderable ? renderableMediaUrl(fallbackUrl) : fallbackUrl;
     const effectiveStorageKey = ownedResourceStorageKey(storageKey, fallbackUrl || fallback);
@@ -129,6 +131,7 @@ export async function resolveImageUrl(storageKey?: string, fallback = "", option
     const cached = objectUrls.get(effectiveStorageKey);
     if (cached) return cached;
     const blob = await store.getItem<Blob>(effectiveStorageKey);
+    if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
     if (!blob) {
         if (!safeFallbackUrl || safeFallbackUrl.startsWith("blob:")) throw new LocalImageUnavailableError(fallbackUrl);
         return safeFallbackUrl;
@@ -158,8 +161,10 @@ export async function getImageBlob(storageKey: string) {
 }
 
 export async function setImageBlob(storageKey: string, blob: Blob) {
+    const session = captureWorkspaceSession();
     if (resourceIdFromStorageKey(storageKey)) return primeResourceBlobCache(storageKey, blob);
     await store.setItem(storageKey, blob);
+    if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
     const url = URL.createObjectURL(blob);
     objectUrls.set(storageKey, url);
     return url;
@@ -202,6 +207,14 @@ export async function deleteStoredImages(keys: Iterable<string>) {
             await store.removeItem(key);
         }),
     );
+}
+
+export function clearImageObjectUrlsForScope(scope: string) {
+    for (const [key, url] of objectUrls) {
+        if (!localForageKeyBelongsToScope(key, scope, IMAGE_FILES_STORE_NAME)) continue;
+        URL.revokeObjectURL(url);
+        objectUrls.delete(key);
+    }
 }
 
 export async function cleanupUnusedImages(usedData: unknown, scope = getActiveUserScope()) {

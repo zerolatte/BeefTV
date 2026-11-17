@@ -63,7 +63,7 @@ func testCanvasHistory(t *testing.T, db *gorm.DB) {
 	}); !errors.Is(err, ErrCanvasHistoryResourceReferenced) {
 		t.Fatalf("history protection = %v", err)
 	}
-	refs, err := repo.CanvasHistoryResourceReferences([]string{resource.ID})
+	refs, err := repo.CanvasHistoryResourceReferences("owner", []string{resource.ID})
 	if err != nil || len(refs) == 0 || refs[0].Kind != "画布历史版本" {
 		t.Fatalf("references = %#v %v", refs, err)
 	}

@@ -1,3 +1,5 @@
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+
 const workspaceRouteLoaders = {
     agents: () => import("@/pages/agents"),
     home: () => import("@/pages/home"),
@@ -18,8 +20,9 @@ export const loadProjectDetailPage = workspaceRouteLoaders.projectDetail;
 export const loadProjectsPage = workspaceRouteLoaders.projects;
 
 export function preloadWorkspaceRoute(pathnameOrSlug: string) {
-    const segments = pathnameOrSlug.replace(/^\//, "").split("/").filter(Boolean);
-    const slug = segments[0] || "home";
+    const segments = pathnameOrSlug.split(/[?#]/)[0].replace(/^\//, "").split("/").filter(Boolean);
+    let slug = segments[0] || "home";
+    if (slug === "project" || slug === "projects") slug = isLocalWorkspaceMode() ? "canvas" : "projects";
     if (slug === "projects" && segments.length > 1) {
         void workspaceRouteLoaders.projectDetail();
         return;

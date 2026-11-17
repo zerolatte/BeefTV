@@ -371,7 +371,7 @@ func doBinaryWithAdmission(req *http.Request, onChunk func(string, []byte), admi
 			return nil
 		}
 	}
-	if noRedirect, _ := req.Context().Value(binaryNoRedirectContext{}).(bool); noRedirect {
+	if noRedirect, _ := req.Context().Value(binaryNoRedirectContext{}).(bool); noRedirect || (runtime.DispatchAdmission != nil && runtime.Call.RequestKind == "create") {
 		client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	}
 	if err := req.Context().Err(); err != nil {
@@ -380,6 +380,16 @@ func doBinaryWithAdmission(req *http.Request, onChunk func(string, []byte), admi
 	if admit != nil {
 		if err := admit(); err != nil {
 			return nil, "", err
+		}
+	}
+	if runtime.DispatchAdmission != nil {
+		if strings.TrimSpace(runtime.Call.RequestKind) == "" {
+			return nil, "", RequestPreparationError{Cause: errors.New("生成请求缺少服务端请求种类")}
+		}
+		if runtime.Call.RequestKind == "create" {
+			if err := runtime.DispatchAdmission.BeforeDispatch(req.Context(), runtime.Call); err != nil {
+				return nil, "", err
+			}
 		}
 	}
 	var videoIdleTimer *time.Timer

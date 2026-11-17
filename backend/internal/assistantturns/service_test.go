@@ -282,6 +282,9 @@ func TestHistoryCountsRepeatedEditsOnceAndRetainsEveryReceipt(t *testing.T) {
 func TestTaskBindingHistoryAndUndoRetainOriginalReceiptOwnership(t *testing.T) {
 	fx := openTurnFixture(t)
 	fx.appendNode(t, "bound-image")
+	if err := fx.db.Create(&model.Resource{ID: "ready", UserID: fx.userID, Status: model.ResourceStatusReady}).Error; err != nil {
+		t.Fatal(err)
+	}
 	before := fx.readCanvas(t)
 	turnID := "aabbccdd11223400"
 	if _, err := fx.turns.Begin(fx.userID, fx.canvasID, turnID, assistantturns.Input{}); err != nil {

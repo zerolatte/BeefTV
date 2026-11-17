@@ -86,7 +86,7 @@ func testCanvasRevision(t *testing.T, db *gorm.DB) {
 	}
 	wrongOwner := *winner
 	wrongOwner.UserID = "another-user"
-	if err := repo.UpsertCanvasProject(&wrongOwner); !errors.Is(err, ErrCanvasRevisionConflict) {
+	if err := repo.UpsertCanvasProject(&wrongOwner); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("wrong owner = %v", err)
 	}
 	createCollision := initial
@@ -99,6 +99,9 @@ func testCanvasRevision(t *testing.T, db *gorm.DB) {
 		t.Fatal("rejected save changed the canvas")
 	}
 
+	if err := db.Create(&model.Project{ID: "project", UserID: "owner", Name: "project"}).Error; err != nil {
+		t.Fatal(err)
+	}
 	if err := repo.AssignCanvasToProject("owner", initial.ID, "project"); err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +118,7 @@ func testCanvasRevision(t *testing.T, db *gorm.DB) {
 	if err := db.Delete(&model.CanvasProject{}, "id = ?", initial.ID).Error; err != nil {
 		t.Fatal(err)
 	}
-	if err := repo.UpsertCanvasProject(stored); !errors.Is(err, ErrCanvasRevisionConflict) {
+	if err := repo.UpsertCanvasProject(stored); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Fatalf("deleted canvas was recreated: %v", err)
 	}
 	t.Run("history", func(t *testing.T) { testCanvasHistory(t, db) })

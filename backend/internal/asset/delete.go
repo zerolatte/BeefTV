@@ -97,9 +97,19 @@ func (s *Service) DeleteUserAssetWithResources(userID string, assetID string, ex
 	if s == nil || s.repo == nil {
 		return ResourceMissing()
 	}
+	durable, strict := s.repo.(DurableDeletion)
 	expected, err := normalizeExpectedAssetStatus(expectedStatus)
 	if err != nil {
 		return err
+	}
+	if strict {
+		exists, _, err := durable.AssetDeletionState(userID, assetID)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return s.finishDurableDeletion(durable, userID, assetID)
+		}
 	}
 	asset, err := s.repo.AssetForUser(userID, assetID)
 	if err != nil {
@@ -160,16 +170,21 @@ func (s *Service) DeleteUserAssetWithResources(userID string, assetID string, ex
 		for _, reference := range snapshot.Direct {
 			if _, exists := ownedIDSet[reference.ResourceID]; exists {
 				retainedResourceIDs[reference.ResourceID] = struct{}{}
+				if strict {
+					usages = append(usages, ResourceUsage{Kind: reference.Kind, ID: reference.ID, Title: reference.Title})
+				}
 			}
 		}
 		for _, document := range snapshot.Documents {
-			switch document.TaskStatus {
-			case model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled:
-				if document.Kind == "任务日志" || document.Kind == "任务结果" {
-					continue
-				}
-				if document.Kind == "任务" {
-					document.SecondaryJSON = ""
+			if !strict {
+				switch document.TaskStatus {
+				case model.TaskStatusSucceeded, model.TaskStatusFailed, model.TaskStatusCancelled:
+					if document.Kind == "任务日志" || document.Kind == "任务结果" {
+						continue
+					}
+					if document.Kind == "任务" {
+						document.SecondaryJSON = ""
+					}
 				}
 			}
 			referencedIDs := assets.DocumentReferencedIDs(document.PrimaryJSON, ownedIDSet)
@@ -177,6 +192,9 @@ func (s *Service) DeleteUserAssetWithResources(userID string, assetID string, ex
 				referencedIDs[resourceID] = struct{}{}
 			}
 			if len(referencedIDs) > 0 {
+				if strict {
+					usages = append(usages, ResourceUsage{Kind: document.Kind, ID: document.ID, Title: document.Title})
+				}
 				for resourceID := range referencedIDs {
 					retainedResourceIDs[resourceID] = struct{}{}
 				}
@@ -194,6 +212,19 @@ func (s *Service) DeleteUserAssetWithResources(userID string, assetID string, ex
 	}
 	if message := OccupiedMessage(usages); message != "" {
 		return kernel.BadAuthRequest(message)
+	}
+	if strict {
+		err := durable.PrepareAssetDeletion(userID, assetID, ownedIDs, expected)
+		if errors.Is(err, repository.ErrAssetExpectedStatusMismatch) {
+			return TrashStatusConflict()
+		}
+		if errors.Is(err, repository.ErrCanvasHistoryResourceReferenced) || errors.Is(err, repository.ErrResourceCleanupStillReferenced) {
+			return StillReferenced()
+		}
+		if err != nil {
+			return err
+		}
+		return s.finishDurableDeletion(durable, userID, assetID)
 	}
 
 	physicalObjects := map[string]*model.Resource{}
@@ -226,6 +257,18 @@ func (s *Service) DeleteUserAssetWithResources(userID string, assetID string, ex
 	}
 	if len(deletionJobs) > 0 {
 		s.runBackground(func() { s.DrainDeletionJobs(len(deletionJobs)) })
+	}
+	return nil
+}
+
+func (s *Service) finishDurableDeletion(durable DurableDeletion, userID, assetID string) error {
+	s.DrainDeletionJobs(32)
+	_, complete, err := durable.AssetDeletionState(userID, assetID)
+	if err != nil {
+		return err
+	}
+	if !complete {
+		return &kernel.AppError{Status: 409, Code: 409, Reason: "asset_deletion_pending", Message: "素材正在清理，后台将继续重试"}
 	}
 	return nil
 }

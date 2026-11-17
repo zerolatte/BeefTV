@@ -1,8 +1,113 @@
 ---
-title: 本地 HTTP API
+title: HTTP API
 ---
 
-# 本地 HTTP API
+# HTTP API
+
+本文默认描述 local HTTP 合同；platform 使用独立路由表，目前仍在按阶段开发，不能把下列本地生成与扩展能力视为平台已开放接口。
+
+## 平台模式（开发中）
+
+所有平台路径统一加 `/api` 前缀。认证前仅开放 `GET /runtime`、`GET /healthz`、`GET /auth/csrf` 和 `POST /auth/login`。其他已注册业务路由要求有效会话；全部修改请求还校验准确 Origin 与绑定会话的 `X-CSRF-Token`。平台不接受查询参数、桌面令牌、owner token 或本机 Agent 凭据作为身份。
+
+登录前使用 `GET /auth/csrf?purpose=login` 获取登录 CSRF，即使浏览器已有其他标签页设置的 Cookie，也能重新认证原账号。普通业务 JSON 请求通过 `X-Platform-Session` 绑定客户端开始操作时的会话；与 Cookie 会话不匹配时返回 `401 session_mismatch`，客户端保留草稿并进入恢复界面，不自动重放写请求。
+
+| 路由组 | 当前注册范围 |
+| --- | --- |
+| 账号会话 | `GET /auth/me`、`GET /auth/security-events`；`POST /auth/logout`、`POST /auth/password` |
+| 工作区与能力 | `GET /workspace/bootstrap`、`GET /features`，生成能力为关闭 |
+| 接口规范 | `GET /openapi.yaml`，需要有效会话，范围来自实际平台路由图 |
+| 项目 | 当前项目 handler 的 `/project-folders`、`/voice-profiles`、`/projects` 及项目详情、章节、画布关联、项目素材/角色/镜头等子路由；只使用会话工作区 |
+| 画布 | `GET /canvas-projects`；`GET/PUT/DELETE /canvas-projects/:id`；事件流、历史查询与恢复 |
+| 画布目录与画板 | `GET /canvas-folders`、`PUT/DELETE /canvas-folders/:id`；画布 drawings 列表及单项 `GET/PUT/DELETE` |
+| 风格档案 | `GET/POST /style-profiles`，单项 `PATCH/DELETE`，收藏 `PATCH`、使用 `POST` |
+| 提示词定制 | `GET /settings/prompt-templates`；单操作 `PATCH/DELETE /settings/prompt-templates/:operation`，仅修改本人定制 |
+| 文本工作流 | 操作目录、模板校验与增删改查、运行列表与详情；运行、重试、取消和选图路由已注册，生产执行仍关闭 |
+| 素材库 | `GET /assets`、`POST /assets/batch`、单项 `GET/PUT/DELETE`、`PATCH /assets/folder`；素材目录 `GET/POST` 与单项 `PATCH/DELETE` |
+| 用户管理 | `GET/POST /admin/users`、`PATCH/DELETE /admin/users/:id`、`POST /admin/users/:id/reset-password`；仅有效管理员 |
+| 额度与管理审计 | 账号额度、存储上限、点数调整、用量/人工核对和管理审计；仅有效管理员，具体合同见下表 |
+| 授权模型目录 | `GET /models/catalog`；按当前账号授权过滤，返回能力与固定点数价格，不返回渠道配置 |
+| 模型管理 | `/admin/channels`、`/admin/models` 及凭据版本、渠道模型、模型发布与价格子路由；仅有效管理员 |
+
+平台绑定账号 ID 与工作区 ID。内容表的 `user_id` 为工作区 ID；账号正文不能切换工作区，管理员访问业务内容也没有跨用户豁免。经管理员开户或重置后，在强制改密完成前只允许本人身份、安全事件、退出和改密接口。
+
+项目及章节覆盖式写入采用统一的项目版本：`PATCH /projects/:id`、`PATCH /projects/:id/units/:unitId`、`PATCH /projects/:id/units/reorder` 和 `PATCH /projects/:id/folder` 必须提供正整数 `expectedRevision`。`GET /projects/:id/units/:unitId` 返回 `{unit, projectRevision}`，正文和项目版本来自同一快照。项目版本从项目或 core 响应的 `project.revision` 读取。缺失版本返回 `400 expected_revision_required`；陈旧版本返回 `409 revision_conflict`，客户端保留草稿，不能自动覆盖。此版本合同同时适用于 local。
+
+画布使用文档中的 `revision`：新画布为 `0`，更新必须匹配服务端当前版本，冲突返回 409。平台当前未注册资源派生、自定义中转、旧模型配置、助手、插件/技能、本机 Agent 与环境诊断路由；未注册路径返回 404。详情与阶段限制见「平台模式（开发中）」。
+
+平台任务读取已注册 `GET /tasks`、`/tasks/by-operation/:operationId`、`/tasks/:id`、`/tasks/:id/logs`、`/tasks/:id/text-deltas` 和 `/tasks/:id/text-events`，均要求有效 Cookie 会话和当前工作区归属。文本 SSE 继续使用事件序号游标，撤销会话会关闭长连接。客户端 POST 文本增量或宣布完成的入口保持关闭。正式构造器的 `POST /tasks` 和重新生成仍返回 `403 generation_unavailable`，不因路由存在开放真实上游生成；`recover` 只处理已经持久保存的文本成功结果，不能重复提交未知的执行。
+
+平台 OpenAPI 文档包含当前路由、Cookie 认证、Origin/CSRF、路径参数、通用响应及流式读取合同，尚未逐项定义所有业务请求体、查询参数和数据字段。没有平台注册的本地扩展接口不会出现在该规范中。
+
+### 平台文本工作流
+
+平台注册 `GET /canvas-workflow-operations`，`GET/POST /canvas-workflows`，`POST /canvas-workflows/validate`，单模板 `GET/PUT/DELETE`、`GET /editor`、`GET/POST /runs`，以及 `GET /canvas-workflow-runs/:id` 和 `POST /{retry,select-image,cancel}`。模板、运行和来源任务均限定当前工作区，模型按当前账号授权读取。定义只接受文本输入、文本常量和 `generate.text`，模型配置只允许稳定模型 ID 与提示词；其他操作或上游配置会被拒绝。
+
+启动运行和重试都必须提供 `clientOperationId`，同标识重放沿用原执行，不能跨运行复用重试标识。步骤按运行、节点和执行批次建立稳定子任务标识，使用同一平台准入事务预留点数。额度不足进入 `paused/quota_exceeded`；追加后由用户继续，已完成结果保留，未执行步骤重新校验授权和价格。该执行合同已通过模拟上游验证，生产入口仍返回 `403 generation_unavailable`，读取运行不会隐式推进。
+
+从备份恢复或本地导入的工作流若标记 `backup_recovery_required` 或 `import_recovery_required`，重试返回 409；必须先核对旧执行事实，再以新的操作标识新建运行。没有平台执行意图的历史任务不会被平台领取器处理，失败历史也不能以本地交付证据被展示为可取回。
+
+### 平台资源与存储
+
+平台已开放 `GET /resources`、`GET /resources/:id`、`GET /resources/:id/file` 和 `GET /resources/storage-usage`。用量返回 `{usage:{totalBytes,usedBytes,reservedBytes}}`，文件与 Range 请求同样要求当前工作区归属，管理员没有内容豁免，响应使用 `Cache-Control: no-store`。`PATCH /resources/storage-usage` 仍不注册。
+
+平台前端统一使用 `POST /resources/uploads`、`PUT /resources/uploads/:id/chunks/:index`、`POST /resources/uploads/:id/complete`。开始请求需提供 `X-Idempotency-Key` 或正文 `idempotencyKey`；缺失返回 `400 idempotency_required`，正文还必须提供 `contentDigest`。摘要格式为 `sha256-chunks-v1:<64位小写十六进制>`，按固定 8 MiB 分块，各块 SHA-256 的原始 32 字节按顺序拼接后再做 SHA-256。服务端在接收分片前持久预留声明大小，重启可继续未过期上传，完成重放不重复计量；合并时核验实际字节。
+
+`POST /resources` 接受单文件 multipart，但必须同时提供 `X-Idempotency-Key`、`X-Upload-Size` 和上述格式的 `X-Upload-Digest`，声明大小需与最终文件一致且不超过 50 MiB；先预留再解析请求体。空间不足返回 `403 storage_quota_exceeded`，数据库忙重试耗尽返回 `503 database_busy`。同一键改变内容、文件名或元数据返回 `409 idempotency_conflict`，实际字节摘要不符返回 `409 upload_content_mismatch`。资源派生、播放副本及生成交付仍未开放。
+
+平台素材删除先在事务内校验所有引用并持久化删除意图，再由既有删除队列移除物理对象。删除中的素材和资源不再通过列表、详情、文件或关联写入使用；文件未全部清理或最终结算失败时返回 `409 asset_deletion_pending`，后台重试并在重启后恢复，原始元数据和已用容量保留到全部清理成功。重复删除返回已有进度，完成后幂等成功；旧请求不能复活已经删除的素材 ID。引用冲突不会以“只删素材、保留资源”的方式成功返回。管理员与普通用户遵循相同内容归属规则。
+
+原上传结果被删除后，旧操作标识返回 `409 upload_result_deleted`，再次上传须创建新的操作标识；已终结的预留不重新打开。旧分片完成回执也不会从内存返回已删除资源。
+
+### 平台用户管理
+
+管理接口在会话中间件与领域层分别校验有效管理员身份，管理员必须已完成强制改密。写入只接受声明字段；未知字段、非整数或缺失必填额度返回 400，密码及凭据摘要不进入响应或审计。
+
+| 方法与路径 | 请求与响应 |
+| --- | --- |
+| `GET /admin/users` | `page` 默认 1、`pageSize` 默认 20 且最多 100；返回 `{users,total,page,pageSize}`，包含已逻辑注销账号 |
+| `POST /admin/users` | `{username,displayName,password,role,initialPoints,storageLimitBytes}`；角色为 `admin/user`，两项额度必填且可以明确为 0；返回 `{user}` |
+| `PATCH /admin/users/:id` | 仅 `{displayName?,role?,status?}`，状态为 `active/disabled`，至少填写一项；用户名不可变；返回 `{user}` |
+| `POST /admin/users/:id/reset-password` | `{password}`；撤销原会话并强制下次改密，返回 `{reset:true}` |
+| `DELETE /admin/users/:id` | 逻辑注销并撤销会话，保留工作区、用户名及账务历史；返回 `{id,status:"deleted"}` |
+| `GET /admin/users/:id/quota` | 返回 `{accountId,points:{granted,settled,reserved,available},storage:{limitBytes,usedBytes,reservedBytes}}`；注销账号的历史额度仍可读取 |
+| `PUT /admin/users/:id/storage-quota` | `{limitBytes}` 必填，范围为 `0` 至 `9007199254740991` 的整数；返回上述额度对象 |
+| `POST /admin/users/:id/point-adjustments` | `{clientOperationId,points,reason}`；点数为非零安全整数，原因 1—500 字；返回 `{adjustment}` |
+| `GET /admin/users/:id/quota-reconciliation` | 返回 `{reconciliation:{accountId,consistent,ledgerEntries,granted,settled,reserved}}`；后三项为十进制字符串，不自动修正差异 |
+| `GET /admin/usage` | 同分页参数及可选 `accountId`；返回 `{items,total,page,pageSize}`，仅模型、操作、点数和状态，不含提示词、结果、凭据或渠道信息 |
+| `POST /admin/usage/:id/review` | `{clientOperationId,expectedState,fact,reason}`；只处理已提交超过 24 小时、尚未终结的意图；返回 `{review}` |
+| `GET /admin/audit-logs` | 同用户分页参数，可用 `accountId` 筛选被操作账号；返回 `{logs,total,page,pageSize}` |
+
+点数调整与人工核对要求稳定 `clientOperationId`，相同标识和内容返回原回执；不同内容返回 `409 idempotency_conflict`，缺失标识返回 `400 idempotency_required`。扣减不能侵占已结算或预留点数，加额不能越过安全整数上限，越界返回 `409 quota_adjustment_conflict`。管理员调低存储上限不删除数据，也不修改已有预留；所有调整与审计同事务提交。每条审计仅包含操作者账号、目标账号、动作、脱敏差异和时间，不附带用户项目、提示词或生成内容。最后有效管理员保护只统计已完成改密的启用管理员，未完成初始改密的备用账号不能用来绕过保护。
+
+用量状态为 `reserved/submitting/accepted/unknown/settled/released/compensated`。超过 24 小时仍未确认的执行保留点数，显示 `reviewRequired`。人工核对 `fact` 为 `succeeded`、`not_accepted`、`failed_no_cost` 或 `failed_consumed`，必须填写已核实的终局依据；状态已变化返回 `409 settlement_conflict`，未到期返回 `409 review_not_due`。失败且上游已消耗追加结算与等额补偿。普通账号没有结算写入口，生成仍未在生产平台开放。
+
+### 平台模型、渠道与授权
+
+模型管理沿用管理员会话、CSRF、Origin 与领域权限校验。请求拒绝未知字段，正文最多 128 KiB。渠道凭据只在创建和轮换请求中接收，完整连接地址、Key、Secret Key 和请求头值共同加密保存；管理响应仅包含上游主机、凭据版本、凭据是否配置及请求头名称。
+
+| 方法与路径 | 请求与响应 |
+| --- | --- |
+| `GET /admin/channels` | `page/pageSize` 分页；返回 `{channels,total,page,pageSize}` |
+| `GET /admin/model-protocols` | 返回 `{protocols:[{id,name,capability}]}`，只包含当前平台运行时已注册并启用的协议 |
+| `POST /admin/channels` | `{name,publicAlias?,sortOrder?,concurrencyLimit?,enabled?,credentials:{baseUrl,apiKey,secretKey?,headers?}}`；返回 `{channel}` |
+| `PATCH /admin/channels/:channelId` | 仅修改名称、别名、排序、并发和启停；凭据必须走独立轮换入口 |
+| `POST /admin/channels/:channelId/credentials` | `{baseUrl,apiKey,secretKey?,headers?}`；追加不可变版本，返回脱敏 `{channel}` |
+| `GET/POST /admin/channels/:channelId/models` | 读取 `{models}` 或创建渠道模型；创建体复用渠道模型能力与协议合同 |
+| `PUT /admin/channels/:channelId/models/:modelId` | 更新未被发布版本引用的渠道模型；已引用返回 `409 model_version_in_use`，需要创建新的渠道模型 |
+| `GET /admin/models` | 分页返回 `{models,total,page,pageSize}` |
+| `GET /admin/models/:modelId` | 返回 `{model,revision,capabilitySpec,defaultOptions,routes}` |
+| `POST /admin/models`、`PUT /admin/models/:modelId` | `{code,name,icon?,description?,enabled,sortOrder?,capabilitySpec,defaultOptions,routes}`；更新须附 `expectedRevisionId`；发布新版本并保留稳定模型 ID、旧能力和路由 |
+| `GET /admin/models/:modelId/prices` | 返回 `{prices}`，按操作和版本列出不可变价格历史 |
+| `POST /admin/models/:modelId/prices` | `{operation,points}`；必须属于已发布能力，点数为 `1` 至 `9007199254740991` 的整数；返回 `{price}` |
+| `GET/PUT /admin/users/:id/model-grants` | 读取或完整替换 `{logicalModelIds}`；清空必须明确发送空数组，不接受缺失字段或未知模型 |
+| `GET /models/catalog` | `{source:"frontend",models,channels:[]}`；模型包含 `pointPrices` 操作到整数点数映射，缺有效价格时不可用 |
+
+逻辑模型 `code` 在创建后不可修改，更新时缺少预期版本返回 `400 expected_revision_required`，陈旧版本返回 `409 revision_conflict`。模型必须明确声明操作，且能力被所选渠道路由覆盖。凭据轮换、价格发布和模型发布均只追加版本，不提供删除历史版本接口；这些操作与脱敏管理审计同事务提交。
+
+目录每次读取重新校验账号与工作区绑定、授权、启用状态和当前价格，管理员业务目录也按自己的授权过滤。平台真实生成尚未开放；文本准入、账本和已有 worker 的模拟测试通过不代表媒体交付及真实付费验收已完成。
+
+## 本地模型与任务合同
 
 图片任务的 `input.config` 支持 Seedream 参数：`seedreamMode`（`image` 或
 `layers`）、`seedreamMaxImages`（关联组图上限）、`seedreamOutputFormat`
@@ -156,6 +261,8 @@ BeefTV 官方算力视频模型的控件与校验使用 `/v1/models` 下发的 `
 
 ### 画布可复用工作流
 
+运行调度支持 `status: paused`、`reason: quota_exceeded`：步骤原子准入返回明确的额度不足后停止后续准入，继续收集已受理任务的结果。追加额度不会自动恢复；用户通过现有 `retry` 接口继续，保留运行 ID、已完成步骤与输出，未执行步骤沿用稳定操作标识，并在准入时重新校验当前授权及价格。暂停期间输入保持锁定，可停止运行。平台复用此调度器，目前只接入文本配方，生产生成仍关闭；范围见本文的平台文本工作流章节。
+
 所有接口使用现有 `{code,msg,data}` 信封，并限定当前工作区 owner。模板创建、删除、运行、重试与取消仅接受可信桌面 UI，外部 Agent 凭据无法调用写入口。
 
 | 方法 | 路径 | 请求或返回的 `data` |
@@ -170,7 +277,7 @@ BeefTV 官方算力视频模型的控件与校验使用 `/v1/models` 下发的 `
 | GET | `/canvas-workflows/:id/runs` | `{runs: Run[]}`，最近 100 次 |
 | POST | `/canvas-workflows/:id/runs` | 接收 `{clientOperationId,inputs,templateRevision?}`，返回 `Run` |
 | GET | `/canvas-workflow-runs/:id` | `Run` |
-| POST | `/canvas-workflow-runs/:id/retry` | 重试失败步骤，返回 `Run` |
+| POST | `/canvas-workflow-runs/:id/retry` | 重试失败步骤，或继续额度暂停的运行，返回 `Run` |
 | POST | `/canvas-workflow-runs/:id/cancel` | 停止后续步骤并尝试取消已开始任务，返回 `Run` |
 
 `definition` 为 `{version:1,nodes,edges,outputNodeIds}`。节点字段为 `{id,title,mediaType,role,resourceId?,text?,sourceTaskId?}`；素材类型为 `image|video|audio|text`，角色为 `input|constant|generation|depth`。连线使用 `{fromNodeId,toNodeId}`。每个生成步骤必须引用同用户的已成功标准生成任务；后端冻结参数与准确的参考素材槽位。变量必须唯一匹配原槽位或原提示词片段，无法映射、重复、循环或断开的可替换输入会在保存前报错。深度步骤只接受一个视频输入。输入替换为 `{[nodeId]:{resourceId?,text?}}`，省略某输入则使用模板默认值。

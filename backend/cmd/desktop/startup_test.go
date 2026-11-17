@@ -86,6 +86,7 @@ func TestSeparateWorkspaceRunsItsOwnStartup(t *testing.T) {
 func TestPrimaryStartupFailureStillRecordsWorkspaceLockError(t *testing.T) {
 	ownerDir := t.TempDir()
 	app := newDesktopApp(ownerDir)
+	t.Cleanup(func() { app.stop(context.Background()) })
 	app.tempDir = t.TempDir()
 	lock, err := runtimeinfo.LockWorkspace(ownerDir)
 	if err != nil {

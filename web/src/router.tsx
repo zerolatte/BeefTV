@@ -6,7 +6,7 @@ import "@/lib/plugins/builtin";
 import { syncActiveClientPlugins } from "@/lib/plugins/plugin-client-loader";
 import { usePluginSlot } from "@/lib/plugins/slot-registry";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
-import { loadAgentsPage, loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadHomePage, loadProjectDetailPage } from "@/lib/workspace-route-modules";
+import { loadAgentsPage, loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadHomePage, loadProjectDetailPage, loadProjectsPage } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import RouteErrorPage from "@/pages/route-error";
 import { isLocalWorkspaceMode } from "@/services/workspace-mode";
@@ -21,6 +21,9 @@ const NotFound = lazy(() => import("@/pages/not-found"));
 const EagleLibraryPage = lazy(() => import("@/pages/plugins/eagle"));
 const PluginsPage = lazy(() => import("@/pages/plugins"));
 const ProjectDetailPage = lazy(loadProjectDetailPage);
+const ProjectLibraryPage = lazy(loadProjectsPage);
+const PlatformAdminPage = lazy(() => import("@/pages/platform-admin"));
+const PlatformModelCatalogPage = lazy(() => import("@/pages/platform-model-catalog"));
 const SettingsPage = lazy(() => import("@/pages/settings"));
 const SkillsPage = lazy(() => import("@/pages/skills/marketplace"));
 const TestVoiceRecording = lazy(() => import("@/pages/test-voice-recording"));
@@ -47,6 +50,10 @@ function LocalAwareProjectRoute() {
     const localMode = isLocalWorkspaceMode();
     if (localMode && projectId) return <Navigate to={`/canvas/${projectId}`} replace />;
     return deferred(<ProjectDetailPage />);
+}
+
+function ProjectLibraryRoute() {
+    return deferred(isLocalWorkspaceMode() ? <CanvasPage /> : <ProjectLibraryPage />);
 }
 
 function LegacyProjectAliasRoute() {
@@ -104,14 +111,16 @@ export const router = createWorkspaceRouter([
         errorElement: <RouteErrorPage />,
         children: [
             { path: "/", element: deferred(<HomePage />) },
-            { path: "/create", element: deferred(<CreatePage />) },
+            { path: "/admin", element: deferred(<PlatformAdminPage />) },
+            { path: "/models", element: deferred(<PlatformModelCatalogPage />) },
+            { path: "/create", element: <RequireFeature feature="creationEnabled">{deferred(<CreatePage />)}</RequireFeature> },
             {
                 path: "/tasks",
                 // 任务页暂不开放，保留路由以避免旧链接进入半成品界面。
                 element: <Navigate to="/" replace />,
             },
             { path: "/assets", element: deferred(<AssetsPage />) },
-            { path: "/skills", element: deferred(<SkillsPage />) },
+            { path: "/skills", element: <RequireFeature feature="skillsEnabled">{deferred(<SkillsPage />)}</RequireFeature> },
             { path: "/skill", element: <Navigate to="/skills" replace /> },
             { path: "/skills/reference", element: <Navigate to="/" replace /> },
             {
@@ -130,18 +139,18 @@ export const router = createWorkspaceRouter([
                 path: "/p/:pluginId/*",
                 element: <RequireFeature feature="pluginCenterEnabled"><PluginHostPageRoute /></RequireFeature>,
             },
-            { path: "/settings", element: deferred(<SettingsPage />) },
-            { path: "/agents", element: deferred(<AgentsPage />) },
-            { path: "/test-voice-recording", element: deferred(<TestVoiceRecording />) },
+            { path: "/settings", element: <RequireFeature feature="customChannelsEnabled">{deferred(<SettingsPage />)}</RequireFeature> },
+            { path: "/agents", element: <RequireFeature feature="localAgentEnabled">{deferred(<AgentsPage />)}</RequireFeature> },
+            { path: "/test-voice-recording", element: <RequireFeature feature="localAgentEnabled">{deferred(<TestVoiceRecording />)}</RequireFeature> },
             {
                 path: "/projects",
-                element: deferred(<CanvasPage />),
+                element: <ProjectLibraryRoute />,
             },
             // LibTV 使用单数 `/project` 作为项目库入口；直接渲染本地项目库，
             // 保留原始 URL，避免像素复刻时出现一次重定向造成的布局/加载闪烁。
             {
                 path: "/project",
-                element: deferred(<CanvasPage />),
+                element: <ProjectLibraryRoute />,
             },
             {
                 path: "/projects/:projectId",

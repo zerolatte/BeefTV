@@ -338,7 +338,7 @@ func TestRetryAfterMigrateFailureExportsInconclusiveAndRespectsConcurrentWorkspa
 	enteredRetryLock := make(chan struct{})
 	releaseRetryLock := make(chan struct{})
 	attempt := 0
-	var competingLock *os.File
+	var competingLock *runtimeinfo.WorkspaceLock
 	app.openRuntime = func(_ context.Context, _ string, onPhase func(phase, detail string)) (*bootstrap.Runtime, error) {
 		attempt++
 		if attempt == 1 {

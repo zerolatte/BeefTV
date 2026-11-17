@@ -24,6 +24,7 @@ func newAssistantTurnService(t *testing.T) (*Service, string, int64) {
 	if err != nil {
 		t.Fatalf("打开临时库失败: %v", err)
 	}
+	t.Cleanup(func() { closeDB(t, db) })
 	if err := database.MigrateLocalSchema(db); err != nil {
 		t.Fatalf("迁移失败: %v", err)
 	}
@@ -31,6 +32,7 @@ func newAssistantTurnService(t *testing.T) (*Service, string, int64) {
 		t.Fatalf("创建工作区失败: %v", err)
 	}
 	service := NewLocal(repository.New(db), t.TempDir())
+	registerTestServiceCleanup(t, service)
 	doc := map[string]any{"id": "canvas-1", "title": "撤销回归", "revision": 0,
 		"nodes":       []any{map[string]any{"id": "n1", "type": "text", "title": "原节点", "position": map[string]any{"x": 0, "y": 0}}},
 		"connections": []any{}}

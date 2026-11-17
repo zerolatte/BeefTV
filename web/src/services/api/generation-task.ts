@@ -16,6 +16,7 @@ import { buildBackendToolRequests, type ResponseFunctionTool, type ResponseInput
 import { assertAgentExchangeBudget } from "@/lib/canvas/agent-context-budget";
 import { ApiError } from "@/services/api/request";
 import { isReferenceHTTPSLink, uploadReferenceLinks, type ResolveReferenceLinks, type ReferenceLinkRequest } from "./reference-link-replacement";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 export { logicalModelIDForConfig };
 
@@ -111,6 +112,7 @@ export async function runBackendGenerationTask(
     }: BackendGenerationTaskOptions,
     dependencies: GenerationTaskDependencies = defaultDependencies,
 ) {
+    assertGenerationAvailable();
     throwIfAborted(signal);
     assertBackendRuntimeConfigured(config);
     const prepared = await prepareGenerationReferences({ config, mode, referenceImages, referenceVideos, referenceAudios, mask });
@@ -125,6 +127,7 @@ export async function runBackendGenerationTask(
 // 分镜等后台生产流程只需要可靠提交任务；任务状态与产物由项目工作区轮询和
 // 后端自动回填负责，不能让页面 mutation 一直等待供应商完成。
 export async function submitBackendGenerationTask(options: BackendGenerationTaskOptions, dependencies: GenerationTaskDependencies = defaultDependencies): Promise<GenerationTask> {
+    assertGenerationAvailable();
     throwIfAborted(options.signal);
     assertBackendRuntimeConfigured(options.config);
     const prepared = await prepareGenerationReferences(options);
@@ -146,6 +149,7 @@ type BackendToolGenerationOptions = {
 
 // 准备和执行复用完全相同的任务协议，准备阶段不提交模型任务。
 export function prepareBackendToolGenerationTask(options: BackendToolGenerationOptions): CreateTaskInput {
+    assertGenerationAvailable();
     throwIfAborted(options.signal);
     assertAgentExchangeBudget(options.messages, options.tools, options.config.systemPrompt || "");
     const imageKeys = new Set<string>();
@@ -196,6 +200,7 @@ export async function runBackendToolGenerationTask(options: BackendToolGeneratio
 }
 
 export async function runBackendGenerationTaskBatch(options: BackendGenerationTaskOptions & { count: number }, dependencies: GenerationTaskDependencies = defaultDependencies) {
+    assertGenerationAvailable();
     const count = Math.max(1, Math.min(15, Math.floor(Number(options.count)) || 1));
     throwIfAborted(options.signal);
     if (options.retryContextsByBatchIndex && options.retryContextsByBatchIndex.length !== count) throw new Error("生成重试批次任务数量不匹配");
@@ -336,6 +341,7 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
 }
 
 export async function prepareBackendGenerationTask(options: BackendGenerationTaskOptions): Promise<CreateTaskInput> {
+    assertGenerationAvailable();
     throwIfAborted(options.signal);
     assertBackendRuntimeConfigured(options.config);
     const prepared = await prepareGenerationReferences(options);

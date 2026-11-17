@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUserStore } from "@/stores/use-user-store";
 import { createJSONStorage, persist } from "zustand/middleware";
 
 import { scopedLocalStorage } from "@/lib/user-scope";
@@ -188,6 +189,7 @@ export const useCreationPreferencesStore = create<CreationPreferencesStore>()(
         }),
         {
             name: CREATION_PREFERENCES_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: createJSONStorage(() => scopedLocalStorage),
             partialize: (state) => ({ preferences: state.preferences }),
             merge: (persisted, current) => {

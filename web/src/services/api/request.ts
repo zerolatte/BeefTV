@@ -1,5 +1,13 @@
 import axios, { type AxiosRequestConfig, type AxiosResponse } from "axios";
 
+import {
+    createWorkspaceSessionRequest,
+    captureWorkspaceSession,
+    invalidateWorkspaceSession,
+    type WorkspaceSessionRequestBinding,
+} from "@/services/workspace-session";
+import { getRuntimeMode } from "@/services/workspace-mode";
+
 
 export type ApiParams = Record<string, string | string[] | number | number[] | undefined>;
 
@@ -51,6 +59,53 @@ export let apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 // 本地预览和桌面模式都必须在后端暂不可用时尽快降级到本地工作区；
 // 没有超时会让启动水合一直停留在 loading，Playwright 和用户都看不到页面。
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true, timeout: 4_000 });
+
+let platformCsrfToken: string | null = null;
+const sessionBindings = new WeakMap<object, WorkspaceSessionRequestBinding>();
+
+export function setPlatformCsrfToken(token: string | null) {
+    platformCsrfToken = token;
+}
+
+apiClient.interceptors.request.use((config) => {
+    const session = captureWorkspaceSession().identity;
+    const path = config.url?.split("?")[0];
+    if (getRuntimeMode() === "platform" && !session && path !== "/runtime" && path !== "/healthz" && !path?.startsWith("/auth/")) {
+        throw new DOMException("平台会话尚未确认", "AbortError");
+    }
+    const binding = createWorkspaceSessionRequest(config.signal);
+    config.signal = binding.signal;
+    sessionBindings.set(config, binding);
+    if (session?.mode === "platform" && session.sessionId && path !== "/auth/login" && path !== "/auth/csrf") {
+        config.headers.set("X-Platform-Session", session.sessionId);
+    }
+    const method = (config.method || "get").toLowerCase();
+    if (platformCsrfToken && !["get", "head", "options"].includes(method)) {
+        config.headers.set("X-CSRF-Token", platformCsrfToken);
+    }
+    return config;
+}, (error: unknown) => { throw error; }, { synchronous: true });
+
+apiClient.interceptors.response.use((response) => {
+    const binding = sessionBindings.get(response.config);
+    binding?.release();
+    if (binding && !binding.isCurrent()) throw new DOMException("工作区会话已切换", "AbortError");
+    return response;
+}, (error: unknown) => {
+    const config = axios.isAxiosError(error) ? error.config : undefined;
+    const binding = config ? sessionBindings.get(config) : undefined;
+    binding?.release();
+    if (binding && !binding.isCurrent()) return Promise.reject(new DOMException("工作区会话已切换", "AbortError"));
+    if (axios.isAxiosError<BackendEnvelope<unknown>>(error) && error.response?.status === 401 && ["unauthorized", "session_mismatch"].includes(error.response.data?.reason || "")) {
+        const current = captureWorkspaceSession().identity;
+        const verifiedSession = error.response.headers["x-platform-session"];
+        if (current?.mode === "platform" && verifiedSession !== current.sessionId) {
+            platformCsrfToken = null;
+            invalidateWorkspaceSession("session_revoked");
+        }
+    }
+    return Promise.reject(error);
+});
 
 export function configureApiRuntime(baseURL: string, launchToken?: string, uiBootstrapToken?: string) {
     apiBaseURL = baseURL;

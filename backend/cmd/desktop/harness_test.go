@@ -125,7 +125,7 @@ func TestHarnessBridgeServesSPAAndAssetsWithoutCredentials(t *testing.T) {
 }
 
 func TestDesktopAcceptsSeparatedDataDirectoryFlag(t *testing.T) {
-	if err := validateDesktopArgs([]string{"--data-dir", "/Users/example/BeefTV"}); err != nil {
+	if err := validateDesktopArgs([]string{"--data-dir", t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"--data-dir"}, {"--data-dir", "relative"}, {"--data-dir", "/"}} {

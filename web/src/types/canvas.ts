@@ -199,6 +199,7 @@ export type CanvasNodeMetadata = {
         definition: WorkflowDefinition;
         run?: WorkflowRun;
         intent?: { clientOperationId: string; inputs: Record<string, WorkflowValue> };
+        retryIntent?: { clientOperationId: string; runId: string };
         error?: string;
         inputsChanged?: boolean;
         runApplied?: boolean;

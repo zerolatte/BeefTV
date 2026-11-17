@@ -1,7 +1,6 @@
-import { App, Button, Dropdown, Form, Input, InputNumber, Modal, Popconfirm } from "antd";
-import { AppModal } from "@/components/ui/product/app-modal";
+import { App, Button, Dropdown, Input, InputNumber, Modal, Popconfirm } from "antd";
 import { Tooltip } from "@/components/ui/base/tooltip";
-import { useDeferredValue, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 
@@ -12,39 +11,20 @@ import Highlight from "@tiptap/extension-highlight";
 import Placeholder from "@tiptap/extension-placeholder";
 import TextAlign from "@tiptap/extension-text-align";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
-    AlignCenter,
-    AlignJustify,
-    AlignLeft,
-    AlignRight,
-    Bold,
     Check,
-    ChevronDown,
     Clapperboard,
-    Code2,
     Crosshair,
-    Eraser,
     FileUp,
     GripVertical,
-    Highlighter,
-    Italic,
-    Link2,
-    List,
-    ListOrdered,
-    Minus,
     MoreHorizontal,
     MoveVertical,
     Plus,
-    Quote,
-    Redo2,
     Save,
     Search,
-    Strikethrough,
     Trash2,
-    Underline,
-    Undo2,
     UsersRound,
     X,
 } from "lucide-react";
@@ -55,7 +35,6 @@ import { SkillRuntimePicker, useSkillRuntimeCatalog } from "@/components/skills/
 import { ModelPicker } from "@/components/model-picker";
 import { WorkspaceState } from "@/components/layout/workspace-state";
 import { resolveProjectCanvasStyle } from "@/components/canvas/canvas-style-picker-modal";
-import { decodeNovelText, splitTextIntoChapters } from "@/lib/canvas/canvas-document";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import {
     createProjectAssetCandidates,
@@ -65,20 +44,24 @@ import {
     listChapterApplyReceipts,
     replaceProjectUnitShots,
     reorderProjectUnits,
-    updateProjectUnit,
-    type ProjectDetail,
     type ProjectUnit,
 } from "@/services/api/projects";
 import { ApiError } from "@/services/api/request";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
+import { useUserStore } from "@/stores/use-user-store";
+import { PLATFORM_GENERATION_DISABLED_MESSAGE } from "@/services/generation-availability";
 
 import { formatCount, formatTime, statusLabel, type ProjectDetailViewProps } from "./shared";
 import { chapterStoryboardAssets, chapterStoryboardCharacters, chapterStoryboardReplaceImpact, storyboardRowsToProjectShots } from "./chapter-storyboard-production";
 import { chapterAssetsFromGenerationTask, chapterStoryboardFromGenerationTask, chapterStoryboardRecoveryDecision, chapterTaskIdentity, extractChapterAssets, generateChapterStoryboard } from "./project-chapter-ai";
+import { useChapterSave } from "./use-chapter-save";
+import { EditorToolbar } from "./chapter-editor-toolbar";
+import { CreateChapterModal, ImportNovelModal } from "./chapter-dialogs";
 
 const CHAPTER_ROW_HEIGHT = 62;
-const MAX_NOVEL_IMPORT_CHAPTERS = 2500;
 type ChapterOperationKind = "characters" | "storyboard";
 type ChapterOperation = { startedAt: number; taskId?: string };
 type PendingStoryboardRecovery = {
@@ -96,6 +79,8 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     const { message, modal } = App.useApp();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
+    const features = useUserStore((state) => state.features);
+    const generationEnabled = isWorkspaceFeatureEnabled("generationEnabled", features, isLocalWorkspaceMode());
     const { chapterId = "" } = useParams();
     const initialSelectedId = detail.units.some((unit) => unit.id === chapterId) ? chapterId : detail.units[0]?.id || "";
     const [selectedId, setSelectedId] = useState(initialSelectedId);
@@ -109,6 +94,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     const [draftTitle, setDraftTitle] = useState("");
     const [draftHtml, setDraftHtml] = useState("");
     const [dirty, setDirty] = useState(false);
+    const [draftRevision, setDraftRevision] = useState<number | undefined>();
     const [characterExtractOpen, setCharacterExtractOpen] = useState(false);
     const [storyboardOpen, setStoryboardOpen] = useState(false);
     const [chapterOperations, setChapterOperations] = useState<Record<string, ChapterOperation>>({});
@@ -134,6 +120,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
     const chapterTasksQuery = useQuery({
         queryKey: ["project-chapter-generation-tasks", detail.project.id],
         queryFn: () => listGenerationTasks(100, { projectId: detail.project.id }),
+        enabled: generationEnabled,
         refetchInterval: (query) => query.state.data?.some((task) => {
             const identity = chapterTaskIdentity(task);
             return Boolean(identity && (task.status === "queued" || task.status === "running"));
@@ -215,31 +202,16 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         return () => window.clearInterval(timer);
     }, [runningOperationCount]);
 
-    const saveMutation = useMutation({
-        mutationFn: () => selectedUnit
-            ? updateProjectUnit(detail.project.id, selectedUnit.id, {
-                title: draftTitle.trim(),
-                sourceText: draftHtml,
-                status: stripHtml(draftHtml) ? "ready" : "draft",
-            })
-            : Promise.reject(new Error("请选择章节")),
-        onSuccess: ({ unit }) => {
-            queryClient.setQueryData(["project-unit", detail.project.id, unit.id], { unit });
-            queryClient.setQueryData<{ units: ProjectDetail["units"]; canvasCounts: Record<string, number> }>(["project", detail.project.id, "units"], (current) => current ? {
-                ...current,
-                units: current.units.map((item) => item.id === unit.id ? {
-                    ...item,
-                    title: unit.title,
-                    wordCount: unit.wordCount,
-                    status: unit.status,
-                    updatedAt: unit.updatedAt,
-                } : item),
-            } : current);
-            setDirty(false);
-            refreshProject();
-            message.success("章节已保存");
-        },
-        onError: (error) => message.error(error instanceof Error ? error.message : "章节保存失败"),
+    const saveMutation = useChapterSave({
+        projectId: detail.project.id,
+        unitId: selectedUnit?.id,
+        title: draftTitle,
+        sourceText: draftHtml,
+        status: stripHtml(draftHtml) ? "ready" : "draft",
+        expectedRevision: draftRevision,
+        dirty,
+        onSaved: (revision, unchanged) => { setDraftRevision(revision); if (unchanged) setDirty(false); },
+        refreshProject,
     });
     const createMutation = useMutation({
         mutationFn: (values: { title: string; sourceText?: string }) => createProjectUnit(detail.project.id, { kind: "chapter", title: values.title, sourceText: plainTextToHtml(values.sourceText || ""), position: detail.units.length }),
@@ -252,7 +224,10 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         onError: (error) => message.error(error instanceof Error ? error.message : "小说导入失败"),
     });
     const reorderMutation = useMutation({
-        mutationFn: (unitIds: string[]) => reorderProjectUnits(detail.project.id, unitIds),
+        mutationFn: (unitIds: string[]) => {
+            if (!detail.unitListProjectRevision) throw new Error("章节排序版本尚未加载，请重新读取章节列表");
+            return reorderProjectUnits(detail.project.id, unitIds, detail.unitListProjectRevision);
+        },
         onSuccess: () => { refreshProject(); message.success("章节顺序已更新"); },
         onError: (error) => { refreshProject(); message.error(error instanceof Error ? error.message : "章节排序失败"); },
     });
@@ -301,6 +276,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         if (!loadedUnit || !editor) return;
         setDraftTitle(loadedUnit.title);
         setDraftHtml(loadedUnit.sourceText || "");
+        setDraftRevision(detail.unitProjectRevision);
         setDirty(false);
         editor.commands.setContent(loadedUnit.sourceText || "", { emitUpdate: false });
         // 只在切换章节时装载服务端内容，避免项目刷新覆盖当前未保存正文。
@@ -694,8 +670,8 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
                                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[var(--fs-tiny)] text-foreground/38"><span>{dirty ? "有未保存修改" : `保存于 ${formatTime(selectedUnit.updatedAt)}`}</span><span>·</span><span>{formatCount(wordCount)} 字</span><span>·</span><span>{chapterCanvasCount(selectedUnit.id)} 个画布</span></div>
                             </div>
                             <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!selectedUnit || dirty || Boolean(characterOperation)} loading={Boolean(characterOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setCharacterExtractOpen(true); }} aria-label={characterOperation ? `提取角色、场景与道具，已运行 ${formatOperationElapsed(characterOperation.startedAt, operationNow)}` : "提取角色、场景与道具"}>{characterOperation ? `提取资产（已运行${formatOperationElapsed(characterOperation.startedAt, operationNow)}）` : charactersGenerated ? "提取资产（已生成）" : "提取角色、场景与道具"}</Button>
-                                <Button size="small" type="primary" icon={<Clapperboard className="size-3.5" />} disabled={!selectedUnit || dirty || Boolean(storyboardOperation)} loading={Boolean(storyboardOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setSelectedSkillIds([]); setStoryboardOpen(true); }} aria-label={storyboardOperation ? `生成到分镜制作，已运行 ${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}` : "生成到分镜制作"}>{storyboardOperation ? `生成到分镜制作（已运行${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}）` : storyboardGenerated ? "生成到分镜制作（已生成）" : "生成到分镜制作"}</Button>
+                                <Button size="small" icon={<UsersRound className="size-3.5" />} disabled={!generationEnabled || !selectedUnit || dirty || Boolean(characterOperation)} title={!generationEnabled ? PLATFORM_GENERATION_DISABLED_MESSAGE : undefined} loading={Boolean(characterOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setCharacterExtractOpen(true); }} aria-label={characterOperation ? `提取角色、场景与道具，已运行 ${formatOperationElapsed(characterOperation.startedAt, operationNow)}` : "提取角色、场景与道具"}>{characterOperation ? `提取资产（已运行${formatOperationElapsed(characterOperation.startedAt, operationNow)}）` : charactersGenerated ? "提取资产（已生成）" : "提取角色、场景与道具"}</Button>
+                                <Button size="small" type="primary" icon={<Clapperboard className="size-3.5" />} disabled={!generationEnabled || !selectedUnit || dirty || Boolean(storyboardOperation)} title={!generationEnabled ? PLATFORM_GENERATION_DISABLED_MESSAGE : undefined} loading={Boolean(storyboardOperation)} onClick={() => { setSelectedTextModel(effectiveConfig.textModel || effectiveConfig.model || effectiveConfig.textModels[0] || ""); setSelectedSkillIds([]); setStoryboardOpen(true); }} aria-label={storyboardOperation ? `生成到分镜制作，已运行 ${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}` : "生成到分镜制作"}>{storyboardOperation ? `生成到分镜制作（已运行${formatOperationElapsed(storyboardOperation.startedAt, operationNow)}）` : storyboardGenerated ? "生成到分镜制作（已生成）" : "生成到分镜制作"}</Button>
                                 <Button size="small" type={dirty ? "primary" : "default"} icon={dirty ? <Save className="size-3.5" /> : <Check className="size-3.5" />} disabled={!selectedUnit || !dirty || !draftTitle.trim() || saveMutation.isPending} loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>{dirty ? "保存" : "已保存"}</Button>
                             </div>
                         </header>
@@ -782,119 +758,6 @@ function formatOperationElapsed(startedAt: number, now: number) {
     return `${minutes}分钟${seconds}秒`;
 }
 
-function EditorToolbar({ editor }: { editor: Editor | null }) {
-    const setLink = () => {
-        if (!editor) return;
-        const current = String(editor.getAttributes("link").href || "");
-        const href = window.prompt("输入链接地址", current);
-        if (href === null) return;
-        if (!href.trim()) editor.chain().focus().unsetLink().run();
-        else editor.chain().focus().extendMarkRange("link").setLink({ href: href.trim() }).run();
-    };
-    const setColor = () => {
-        const color = window.prompt("输入文字颜色，例如 #d97706", String(editor?.getAttributes("textStyle").color || "#d97706"));
-        if (color?.trim()) editor?.chain().focus().setColor(color.trim()).run();
-    };
-    const setHighlight = () => {
-        const color = window.prompt("输入高亮颜色，例如 #fef3c7", String(editor?.getAttributes("highlight").color || "#fef3c7"));
-        if (color?.trim()) editor?.chain().focus().toggleHighlight({ color: color.trim() }).run();
-    };
-    const blockLabel = editor?.isActive("heading", { level: 1 }) ? "标题 1" : editor?.isActive("heading", { level: 2 }) ? "标题 2" : editor?.isActive("heading", { level: 3 }) ? "标题 3" : "正文";
-    const alignment = editor?.isActive({ textAlign: "center" }) ? "center" : editor?.isActive({ textAlign: "right" }) ? "right" : editor?.isActive({ textAlign: "justify" }) ? "justify" : "left";
-    const alignmentIcon = alignment === "center" ? <AlignCenter className="size-3.5" /> : alignment === "right" ? <AlignRight className="size-3.5" /> : alignment === "justify" ? <AlignJustify className="size-3.5" /> : <AlignLeft className="size-3.5" />;
-    return (
-        <div className="hide-scrollbar flex h-10 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border/70 px-2">
-            <EditorTool editor={editor} label="撤销" icon={<Undo2 className="size-3.5" />} onClick={() => editor?.chain().focus().undo().run()} />
-            <EditorTool editor={editor} label="重做" icon={<Redo2 className="size-3.5" />} onClick={() => editor?.chain().focus().redo().run()} />
-            <ToolbarDivider />
-            <Dropdown trigger={["click"]} menu={{ selectedKeys: [blockLabel], items: ["正文", "标题 1", "标题 2", "标题 3"].map((key) => ({ key, label: key })), onClick: ({ key }) => key === "正文" ? editor?.chain().focus().setParagraph().run() : editor?.chain().focus().toggleHeading({ level: Number(key.slice(-1)) as 1 | 2 | 3 }).run() }}>
-                <button type="button" className="flex h-7 items-center gap-1 rounded px-2 text-xs text-foreground/60 hover:bg-surface-hover" aria-label="段落格式">{blockLabel}<ChevronDown className="size-3" /></button>
-            </Dropdown>
-            <EditorTool editor={editor} label="粗体" icon={<Bold className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBold().run()} active={Boolean(editor?.isActive("bold"))} />
-            <EditorTool editor={editor} label="斜体" icon={<Italic className="size-3.5" />} onClick={() => editor?.chain().focus().toggleItalic().run()} active={Boolean(editor?.isActive("italic"))} />
-            <EditorTool editor={editor} label="下划线" icon={<Underline className="size-3.5" />} onClick={() => editor?.chain().focus().toggleUnderline().run()} active={Boolean(editor?.isActive("underline"))} />
-            <EditorTool editor={editor} label="删除线" icon={<Strikethrough className="size-3.5" />} onClick={() => editor?.chain().focus().toggleStrike().run()} active={Boolean(editor?.isActive("strike"))} />
-            <ToolbarDivider />
-            <Dropdown trigger={["click"]} menu={{ selectedKeys: [alignment], items: [{ key: "left", icon: <AlignLeft className="size-3.5" />, label: "左对齐" }, { key: "center", icon: <AlignCenter className="size-3.5" />, label: "居中" }, { key: "right", icon: <AlignRight className="size-3.5" />, label: "右对齐" }, { key: "justify", icon: <AlignJustify className="size-3.5" />, label: "两端对齐" }], onClick: ({ key }) => editor?.chain().focus().setTextAlign(key).run() }}>
-                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label="文字对齐">{alignmentIcon}</button>
-            </Dropdown>
-            <EditorTool editor={editor} label="项目符号" icon={<List className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBulletList().run()} active={Boolean(editor?.isActive("bulletList"))} />
-            <EditorTool editor={editor} label="编号列表" icon={<ListOrdered className="size-3.5" />} onClick={() => editor?.chain().focus().toggleOrderedList().run()} active={Boolean(editor?.isActive("orderedList"))} />
-            <EditorTool editor={editor} label="引用" icon={<Quote className="size-3.5" />} onClick={() => editor?.chain().focus().toggleBlockquote().run()} active={Boolean(editor?.isActive("blockquote"))} />
-            <EditorTool editor={editor} label="链接" icon={<Link2 className="size-3.5" />} onClick={setLink} active={Boolean(editor?.isActive("link"))} />
-            <Dropdown trigger={["click"]} placement="bottomRight" menu={{ items: [{ key: "color", icon: <span className="text-[var(--fs-label)] font-bold text-amber-600">A</span>, label: "文字颜色" }, { key: "highlight", icon: <Highlighter className="size-3.5" />, label: "高亮颜色" }, { type: "divider" }, { key: "code", icon: <Code2 className="size-3.5" />, label: "行内代码" }, { key: "rule", icon: <Minus className="size-3.5" />, label: "分隔线" }, { key: "clear", icon: <Eraser className="size-3.5" />, label: "清除格式" }], onClick: ({ key }) => { if (key === "color") setColor(); else if (key === "highlight") setHighlight(); else if (key === "code") editor?.chain().focus().toggleCode().run(); else if (key === "rule") editor?.chain().focus().setHorizontalRule().run(); else if (key === "clear") editor?.chain().focus().clearNodes().unsetAllMarks().run(); } }}>
-                <button type="button" className="grid size-7 place-items-center rounded text-foreground/60 hover:bg-surface-hover" aria-label="更多格式"><MoreHorizontal className="size-4" /></button>
-            </Dropdown>
-        </div>
-    );
-}
-
-function EditorTool({ editor, label, icon, active = false, onClick }: { editor: Editor | null; label: string; icon: ReactNode; active?: boolean; onClick: () => void }) {
-    return <Tooltip title={label}><button type="button" aria-label={label} className={`grid size-7 shrink-0 place-items-center rounded ${active ? "bg-surface-active text-[var(--workspace-accent)]" : "text-foreground/55 hover:bg-surface-hover hover:text-foreground"}`} disabled={!editor} onClick={onClick}>{icon}</button></Tooltip>;
-}
-
-function ToolbarDivider() {
-    return <span className="mx-1 h-4 w-px shrink-0 bg-border" />;
-}
-
-function CreateChapterModal({ open, onClose, loading, onSubmit }: { open: boolean; onClose: () => void; loading: boolean; onSubmit: (values: { title: string; sourceText?: string }) => void }) {
-    return <Modal className="library-modal" title="添加章节" open={open} footer={null} destroyOnHidden onCancel={onClose} width={480} styles={{ body: { paddingTop: 12 } }}><Form layout="vertical" onFinish={onSubmit}><Form.Item name="title" label="章节标题" rules={[{ required: true, whitespace: true, message: "请输入章节标题" }]}><Input autoFocus placeholder="例如：雨夜归城" /></Form.Item><Form.Item name="sourceText" label="正文（可选）"><Input.TextArea rows={4} placeholder="创建后仍可继续编辑和排版" /></Form.Item><div className="flex justify-end gap-2"><Button onClick={onClose}>取消</Button><Button type="primary" htmlType="submit" loading={loading}>创建章节</Button></div></Form></Modal>;
-}
-
-function ImportNovelModal({ open, loading, onClose, onImport }: { open: boolean; loading: boolean; onClose: () => void; onImport: (chapters: Array<{ title: string; plainText: string }>) => void }) {
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [text, setText] = useState("");
-    const [fileName, setFileName] = useState("");
-    const deferredText = useDeferredValue(text);
-    const chapters = useMemo(() => deferredText.trim() ? splitTextIntoChapters(deferredText).map((chapter) => ({ title: chapter.title, plainText: chapter.plainText })) : [], [deferredText]);
-    useEffect(() => { if (!open) { setText(""); setFileName(""); } }, [open]);
-    const readFile = async (event: ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        event.target.value = "";
-        if (!file) return;
-        setFileName(file.name);
-        setText(decodeNovelText(await file.arrayBuffer()));
-    };
-    return (
-        <AppModal flush title={null} open={open} footer={null} onCancel={onClose} width={760}>
-            <div className="flex min-h-[478px] flex-col">
-                <header className="flex h-12 shrink-0 items-center border-b border-border px-4"><div><h2 className="text-sm font-semibold">导入小说</h2><p className="mt-0.5 text-[var(--fs-tiny)] text-foreground/42">自动识别章节标题，确认后追加到当前项目</p></div></header>
-                <div className="grid min-h-[430px] flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_240px]">
-                <div className="border-b border-border p-3 md:border-b-0 md:border-r">
-                    <div className="mb-2 flex items-center justify-between gap-2"><div><div className="text-sm font-medium">小说正文</div><div className="mt-0.5 text-[var(--fs-label)] text-foreground/45">识别章节标题后追加到现有章节</div></div><Button size="small" icon={<FileUp className="size-3.5" />} onClick={() => fileInputRef.current?.click()}>{fileName || "选择 TXT"}</Button></div>
-                    <input ref={fileInputRef} type="file" accept=".txt,.md,text/plain,text/markdown" className="hidden" onChange={(event) => void readFile(event)} />
-                    <Input.TextArea value={text} onChange={(event) => setText(event.target.value)} rows={16} placeholder={'也可以直接粘贴小说正文，例如：\n\n第一章 雨夜来信\n正文……\n\n第二章 灯塔以北\n正文……'} className="!resize-none" />
-                </div>
-                <div className="flex min-h-0 flex-col">
-                    <div className="flex h-11 shrink-0 items-center justify-between border-b border-border px-3 text-xs"><span className="font-medium">拆分预览</span><span className="tabular-nums text-foreground/45">{chapters.length} 章</span></div>
-                    <ImportChapterPreview chapters={chapters} />
-                    <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border p-3"><span className={`text-[var(--fs-tiny)] ${chapters.length > MAX_NOVEL_IMPORT_CHAPTERS ? "text-red-500" : "text-foreground/38"}`}>{chapters.length > MAX_NOVEL_IMPORT_CHAPTERS ? `最多一次导入 ${MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString("zh-CN")} 章` : `支持最多 ${MAX_NOVEL_IMPORT_CHAPTERS.toLocaleString("zh-CN")} 章`}</span><div className="flex gap-2"><Button size="small" onClick={onClose}>取消</Button><Button size="small" type="primary" disabled={!chapters.length || chapters.length > MAX_NOVEL_IMPORT_CHAPTERS} loading={loading} onClick={() => onImport(chapters)}>导入 {chapters.length || ""} 章</Button></div></div>
-                </div>
-                </div>
-            </div>
-        </AppModal>
-    );
-}
-
-function ImportChapterPreview({ chapters }: { chapters: Array<{ title: string; plainText: string }> }) {
-    const scrollRef = useRef<HTMLDivElement>(null);
-    const virtualizer = useVirtualizer({
-        count: chapters.length,
-        getScrollElement: () => scrollRef.current,
-        estimateSize: () => 49,
-        overscan: 10,
-    });
-    return (
-        <div ref={scrollRef} className="thin-scrollbar min-h-0 flex-1 overflow-y-auto p-2">
-            {chapters.length ? <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
-                {virtualizer.getVirtualItems().map((virtualItem) => {
-                    const chapter = chapters[virtualItem.index];
-                    return <div key={`${chapter.title}-${virtualItem.index}`} className="absolute left-0 top-0 flex w-full gap-2 border-b border-border/60 px-1.5 py-2" style={{ height: virtualItem.size, transform: `translateY(${virtualItem.start}px)` }}><span className="w-8 shrink-0 pt-0.5 text-[var(--fs-tiny)] tabular-nums text-foreground/35">{String(virtualItem.index + 1).padStart(Math.max(2, String(chapters.length).length), "0")}</span><div className="min-w-0"><div className="truncate text-xs font-medium">{chapter.title}</div><div className="mt-0.5 text-[var(--fs-tiny)] text-foreground/40">{formatCount(chapter.plainText.length)} 字</div></div></div>;
-                })}
-            </div> : <div className="grid h-full place-items-center px-4 text-center text-xs leading-5 text-foreground/40">选择 TXT 文件或粘贴正文后，这里会显示拆分结果</div>}
-        </div>
-    );
-}
 
 function plainTextToHtml(value: string) {
     const escaped = value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

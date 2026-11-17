@@ -106,61 +106,6 @@ func (r *Repository) CreateProjectFolderChecked(folder *model.ProjectFolder) err
 	})
 }
 
-func (r *Repository) MoveProjectAndBump(userID, projectID, folderID string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		current, err := ownedProjectTx(tx, userID, projectID)
-		if err != nil {
-			return err
-		}
-		folderID = strings.TrimSpace(folderID)
-		if folderID != "" {
-			var folder model.ProjectFolder
-			if err := tx.First(&folder, "id = ? AND user_id = ?", folderID, userID).Error; err != nil {
-				return err
-			}
-		}
-		now := time.Now()
-		result := tx.Model(&model.Project{}).Where("id = ? AND user_id = ? AND revision = ?", projectID, userID, current.Revision).Updates(map[string]any{
-			"folder_id":  folderID,
-			"revision":   current.Revision + 1,
-			"updated_at": now,
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrProjectRevisionConflict
-		}
-		return nil
-	})
-}
-
-func (r *Repository) UpdateProjectCAS(userID string, expectedRevision int64, project *model.Project) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		current, err := ownedProjectTx(tx, userID, project.ID)
-		if err != nil {
-			return err
-		}
-		if current.Revision != expectedRevision {
-			return ErrProjectRevisionConflict
-		}
-		result := tx.Model(&model.Project{}).Where("id = ? AND user_id = ? AND revision = ?", project.ID, userID, expectedRevision).Updates(map[string]any{
-			"name": project.Name, "type": project.Type, "aspect_ratio": project.AspectRatio, "source_type": project.SourceType,
-			"description": project.Description, "cover_resource_id": project.CoverResourceID,
-			"style_preset_id": project.StylePresetID, "style_profile_json": project.StyleProfileJSON,
-			"default_image_model": project.DefaultImageModel, "default_video_model": project.DefaultVideoModel,
-			"status": project.Status, "revision": expectedRevision + 1, "updated_at": project.UpdatedAt,
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return ErrProjectRevisionConflict
-		}
-		return nil
-	})
-}
-
 func (r *Repository) CreateProjectUnitAndBump(userID, projectID string, unit *model.ProjectUnit) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		if _, err := requireActiveProjectTx(tx, userID, projectID); err != nil {
@@ -182,51 +127,6 @@ func (r *Repository) ImportProjectUnitsActive(userID, projectID string, units []
 			return err
 		}
 		return bumpProjectRevisionTx(tx, projectID, time.Now())
-	})
-}
-
-func (r *Repository) ReorderProjectUnitsActive(userID, projectID string, unitIDs []string) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if _, err := requireActiveProjectTx(tx, userID, projectID); err != nil {
-			return err
-		}
-		now := time.Now()
-		for position, unitID := range unitIDs {
-			result := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unitID, projectID).Updates(map[string]any{"position": position, "updated_at": now})
-			if result.Error != nil {
-				return result.Error
-			}
-			if result.RowsAffected != 1 {
-				return gorm.ErrRecordNotFound
-			}
-		}
-		return bumpProjectRevisionTx(tx, projectID, now)
-	})
-}
-
-func (r *Repository) UpdateProjectUnitActive(userID string, expectedRevision int64, unit *model.ProjectUnit, invalidateWorkflow bool) error {
-	return r.db.Transaction(func(tx *gorm.DB) error {
-		if _, err := requireActiveProjectTx(tx, userID, unit.ProjectID); err != nil {
-			return err
-		}
-		result := tx.Model(&model.ProjectUnit{}).Where("id = ? AND project_id = ?", unit.ID, unit.ProjectID).Updates(map[string]any{
-			"parent_id": unit.ParentID, "title": unit.Title, "source_text": unit.SourceText, "word_count": unit.WordCount, "status": unit.Status, "position": unit.Position, "updated_at": unit.UpdatedAt,
-		})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected != 1 {
-			return gorm.ErrRecordNotFound
-		}
-		if invalidateWorkflow {
-			if err := tx.Model(&model.ShotArtifact{}).Where("project_id = ? AND unit_id = ? AND status NOT IN ?", unit.ProjectID, unit.ID, []string{"failed", "stale"}).Updates(map[string]any{"status": "stale", "selected": false, "updated_at": unit.UpdatedAt}).Error; err != nil {
-				return err
-			}
-			if err := invalidateUnitWorkflowTx(tx, unit.ProjectID, unit.ID, "story", unit.UpdatedAt); err != nil {
-				return err
-			}
-		}
-		return bumpProjectRevisionCASTx(tx, unit.ProjectID, expectedRevision, unit.UpdatedAt)
 	})
 }
 

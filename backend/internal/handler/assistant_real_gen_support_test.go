@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"archive/zip"
-	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -90,33 +88,7 @@ func redactSecret(value, secret string) string {
 
 func buildE2EProtocolPackages(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.Abs("../../..")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dir := t.TempDir()
-	for _, id := range []string{"openai-images", "openai-videos", "seedance-videos-compatible", "volcengine-ark-seedream"} {
-		manifest, err := os.ReadFile(filepath.Join(root, "plugin-packages", id, "manifest.json"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		var archive bytes.Buffer
-		writer := zip.NewWriter(&archive)
-		entry, err := writer.Create("manifest.json")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := entry.Write(manifest); err != nil {
-			t.Fatal(err)
-		}
-		if err := writer.Close(); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, id+".beeftv-plugin"), archive.Bytes(), 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	return dir
+	return buildTestProtocolPackages(t, "openai-images", "openai-videos", "seedance-videos-compatible", "volcengine-ark-seedream")
 }
 
 func generateFakeGenerationMedia(t *testing.T) ([]byte, []byte) {

@@ -416,6 +416,7 @@ function classifyUnknown(error: unknown, context: GenerationFailureContext): Cla
             }
         }
         if (record.reason === "local_credential_failed") return { category: "local_credential", status: numericStatus(record.status), fromCode: true, retryable: false };
+        if (record.reason === "generation_disabled") return { category: "request_not_sent", reason: "平台生成尚未开放", action: "", fromCode: true, retryable: false };
         if (record.reason === "local_disk_full") return { category: "local_disk_full", status: numericStatus(record.status), fromCode: true, retryable: false };
         if (record.reason === "local_storage_failed") return { category: "local_storage", ...LOCAL_TASK_ADMISSION_FAILURE, fromCode: true, retryable: false };
         if (record.name === "ApiError" && record.reason === "quota_exceeded") {

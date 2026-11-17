@@ -224,7 +224,7 @@ func (l *Library) requireOwnedFolder(userID, folderID string) error {
 	}
 	if _, err := l.repo.AssetFolderForUser(userID, folderID); err != nil {
 		if isNotFound(err) {
-			return kernel.BadAuthRequest("素材分类不存在")
+			return kernel.NotFound("素材分类不存在")
 		}
 		return err
 	}
@@ -251,7 +251,7 @@ func (l *Library) validateOwnedResources(userID, payloadJSON string) error {
 	for _, id := range wanted {
 		resource, exists := owned[id]
 		if !exists {
-			return kernel.BadAuthRequest("素材引用的资源不存在或不属于当前用户")
+			return kernel.NotFound("素材引用的资源不存在")
 		}
 		if resource.Status != model.ResourceStatusReady {
 			return kernel.BadAuthRequest("素材引用的资源尚未就绪")

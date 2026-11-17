@@ -106,6 +106,7 @@ const (
 	AssetVersionStatusReview    AssetVersionStatus = "review"
 	AssetVersionStatusConfirmed AssetVersionStatus = "confirmed"
 	AssetVersionStatusArchived  AssetVersionStatus = "archived"
+	AssetVersionStatusDeleting  AssetVersionStatus = "deleting"
 
 	WorkflowStatusActive    WorkflowStatus = "active"
 	WorkflowStatusCompleted WorkflowStatus = "completed"

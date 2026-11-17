@@ -1,5 +1,6 @@
 import { resolveModelRequestConfig, type AiConfig } from "@/stores/use-config-store";
 import { withOpenAIPromptCacheKey } from "@/lib/openai-prompt-cache";
+import { assertClientTextExecutionAvailable } from "@/services/generation-availability";
 
 import type { AiTextMessage, RequestOptions, ResponseFunctionTool, ResponseInputMessage, ToolChoice, ToolResponseResult } from "@/services/api/image-contracts";
 import { readAxiosError } from "@/services/api/image-response";
@@ -14,6 +15,7 @@ function isToolChoiceCompatibilityError(error: unknown) {
 }
 
 export async function requestImageQuestion(config: AiConfig, messages: AiTextMessage[], onDelta: (text: string) => void, options?: RequestOptions) {
+    assertClientTextExecutionAvailable();
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     try {
         if (requestConfig.apiFormat === "gemini") {
@@ -62,6 +64,7 @@ export async function requestImageQuestion(config: AiConfig, messages: AiTextMes
 }
 
 export async function requestToolResponse(config: AiConfig, messages: ResponseInputMessage[], tools: ResponseFunctionTool[], toolChoice: ToolChoice = "auto", onDelta?: (text: string) => void, options?: RequestOptions): Promise<ToolResponseResult> {
+    assertClientTextExecutionAvailable();
     const requestConfig = resolveModelRequestConfig(config, config.model || config.textModel);
     try {
         if (requestConfig.apiFormat === "gemini") {

@@ -305,6 +305,9 @@ func (s *Service) UpsertUserCanvasDrawing(userID, canvasID, drawingID string, ra
 			return err
 		}
 		row.CanvasID = canvasRow.ID
+		if err := svc.validateCanvasResourceOwnership(userID, raw, nil); err != nil {
+			return err
+		}
 		if err := svc.ownedReadyResource(userID, previewID, "画板预览"); err != nil {
 			return err
 		}
@@ -336,7 +339,10 @@ func (s *Service) UpsertUserCanvasDrawing(userID, canvasID, drawingID string, ra
 				return nil
 			}
 		}
-		if (existing == nil && row.Revision != 0) || (existing != nil && row.Revision != existing.Revision) {
+		if existing == nil && row.Revision != 0 {
+			return kernel.NotFound("画板不存在")
+		}
+		if existing != nil && row.Revision != existing.Revision {
 			return drawingRevisionConflict()
 		}
 		existingBytes := int64(0)
@@ -405,7 +411,7 @@ func (s *Service) ownedReadyResource(userID, id, label string) error {
 	}
 	resource, err := s.repo.ResourceForUser(userID, id)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return kernel.BadAuthRequest(label + "资源不存在")
+		return kernel.NotFound(label + "资源不存在")
 	}
 	if err != nil {
 		return err
@@ -423,7 +429,7 @@ func (s *Service) requireCanvasLibraryFolder(userID, folderID string) error {
 	}
 	_, err := s.repo.CanvasLibraryFolderForUser(userID, folderID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return kernel.BadAuthRequest("画布文件夹不存在")
+		return kernel.NotFound("画布文件夹不存在")
 	}
 	return err
 }

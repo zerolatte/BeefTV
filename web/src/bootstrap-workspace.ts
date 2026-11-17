@@ -3,6 +3,8 @@ import { appPathname } from "@/lib/app-routing";
 import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
 import { setWorkspaceStorageScope } from "@/lib/user-scope";
 import { getWorkspaceBootstrap, type WorkspaceBootstrapPayload } from "@/services/api/workspace";
+import { getRuntimeModeContract } from "@/services/api/platform-auth";
+import { getRuntimeMode, setRuntimeMode } from "@/services/workspace-mode";
 import {
     beginStartupDiagnosticsScope,
     initializeClientDiagnostics,
@@ -19,6 +21,7 @@ import {
 
 export async function ensureWorkspaceStorageHydrated(options?: { retry?: boolean }): Promise<WorkspaceBootstrapPayload> {
     await bootstrapDesktopRuntime(options?.retry ? { retry: true } : undefined);
+    if (getRuntimeMode() === "platform") throw new Error("平台工作区需要先完成身份认证。");
     const payload = await getWorkspaceBootstrap();
     // Store modules automatically hydrate on import. Select this document's
     // durable workspace before they can read another window's last scope.
@@ -36,8 +39,10 @@ export async function ensureWorkspaceStorageHydrated(options?: { retry?: boolean
 }
 
 async function mountWorkspaceApplication() {
-    const { bootstrapAppearance } = await import("@/services/appearance-bootstrap");
-    await bootstrapAppearance().catch(() => console.warn("外观初始化未完成，继续打开工作区"));
+    if (getRuntimeMode() === "local") {
+        const { bootstrapAppearance } = await import("@/services/appearance-bootstrap");
+        await bootstrapAppearance().catch(() => console.warn("外观初始化未完成，继续打开工作区"));
+    }
     await import("./application");
 }
 
@@ -67,6 +72,19 @@ export async function startApplication() {
     }
 
     try {
+        await bootstrapDesktopRuntime();
+        const runtime = await getRuntimeModeContract();
+        setRuntimeMode(runtime.mode, runtime.instanceId);
+        if (runtime.mode === "platform") {
+            settled = true;
+            stopBootProgress();
+            if (progressMounted) {
+                const { unmountStandaloneStartupError } = await import("./mount-startup-error");
+                unmountStandaloneStartupError();
+            }
+            await mountWorkspaceApplication();
+            return;
+        }
         const payload = await ensureWorkspaceStorageHydrated();
         settled = true;
         stopBootProgress();
@@ -85,6 +103,14 @@ export async function startApplication() {
             mountStandaloneStartupError({
                 initialFailure: failure,
                 onRetryBootstrap: async () => {
+                    await bootstrapDesktopRuntime({ retry: true });
+                    const runtime = await getRuntimeModeContract();
+                    setRuntimeMode(runtime.mode, runtime.instanceId);
+                    if (runtime.mode === "platform") {
+                        unmountStandaloneStartupError();
+                        await mountWorkspaceApplication();
+                        return;
+                    }
                     const payload = await ensureWorkspaceStorageHydrated({ retry: true });
                     setPrimedWorkspaceBootstrap(payload);
                     unmountStandaloneStartupError();

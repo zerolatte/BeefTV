@@ -2,6 +2,7 @@ import localforage from "localforage";
 import type { StateStorage } from "zustand/middleware";
 
 import { scopedStorageKey } from "@/lib/user-scope";
+import { captureWorkspaceSession, isWorkspaceSessionCurrent } from "@/services/workspace-session";
 
 export const INFINITE_CANVAS_DB_NAME = "infinite-canvas";
 export const APP_STATE_STORE_NAME = "app_state";
@@ -43,6 +44,8 @@ export type LocalForageKeyStore = {
 
 const stores = new Map<string, LocalForage>();
 let databaseReady: Promise<void> | undefined;
+const lockedScopes = new Set<string>();
+const activeWrites = new Set<{ key: string; storeName: string; promise: Promise<unknown> }>();
 
 // Extra object stores on this IndexedDB name upgrade the whole database and
 // close other connections. Open the fixed store list once, sequentially, then
@@ -91,10 +94,82 @@ async function withStore<T>(storeName: string, job: (store: LocalForage) => Prom
     return job(forageForStore(storeName));
 }
 
+export function localForageKeyBelongsToScope(key: string, scope: string, storeName?: string) {
+    if (!scope) return false;
+    if (storeName === APP_STATE_STORE_NAME) return key.endsWith(`:user:${scope}`);
+    if (storeName === CANVAS_FOLDER_PENDING_STORE_NAME) return key === scope;
+    if (storeName === IMAGE_FILES_STORE_NAME || storeName === MEDIA_FILES_STORE_NAME) {
+        const prefixEnd = key.indexOf(":");
+        return prefixEnd > 0 && key.slice(prefixEnd + 1).startsWith(`${scope}:`);
+    }
+    if (storeName) return key.startsWith(`${scope}:`);
+    return key === scope
+        || key.startsWith(`${scope}:`)
+        || key.endsWith(`:user:${scope}`)
+        || key.includes(`:${scope}:`);
+}
+
+export function lockLocalForageScope(scope: string) {
+    if (!scope) throw new Error("工作区存储范围缺失");
+    lockedScopes.add(scope);
+}
+
+export function unlockLocalForageScope(scope: string) {
+    if (!scope) throw new Error("工作区存储范围缺失");
+    lockedScopes.delete(scope);
+}
+
+export function localForageScopeIsLocked(scope: string) {
+    return lockedScopes.has(scope);
+}
+
+export async function waitForLocalForageScopeWrites(scope: string) {
+    while (true) {
+        const pending = [...activeWrites]
+            .filter((write) => localForageKeyBelongsToScope(write.key, scope, write.storeName))
+            .map((write) => write.promise);
+        if (!pending.length) return;
+        await Promise.allSettled(pending);
+    }
+}
+
+export async function deleteLocalForageScopeData(scope: string) {
+    lockLocalForageScope(scope);
+    await waitForLocalForageScopeWrites(scope);
+    await ensureInfiniteCanvasDatabase();
+    const errors: unknown[] = [];
+    for (const storeName of INFINITE_CANVAS_OBJECT_STORES) {
+        const store = forageForStore(storeName);
+        const keys = await store.keys();
+        const ownedKeys = keys.filter((key) => localForageKeyBelongsToScope(key, scope, storeName));
+        const results = await Promise.allSettled(ownedKeys.map((key) => store.removeItem(key)));
+        for (const result of results) {
+            if (result.status === "rejected") errors.push(result.reason);
+        }
+    }
+    if (errors.length) throw new AggregateError(errors, "工作区 IndexedDB 数据清理失败");
+}
+
 export function localForageInstance(storeName: string): LocalForageKeyStore {
     return {
-        getItem: <T>(key: string) => withStore(storeName, (store) => store.getItem<T>(key)),
-        setItem: <T>(key: string, value: T) => withStore(storeName, (store) => store.setItem(key, value)),
+        getItem: async <T>(key: string) => {
+            const session = captureWorkspaceSession();
+            const value = await withStore(storeName, (store) => store.getItem<T>(key));
+            if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
+            return value;
+        },
+        setItem: <T>(key: string, value: T) => {
+            const session = captureWorkspaceSession();
+            const lockedScope = [...lockedScopes].find((scope) => localForageKeyBelongsToScope(key, scope, storeName));
+            if (lockedScope) return Promise.reject(new Error(`工作区 ${lockedScope} 已退出，拒绝迟到的本地写入`));
+            const write = { key, storeName, promise: Promise.resolve() as Promise<unknown> };
+            write.promise = withStore(storeName, (store) => {
+                if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
+                return store.setItem(key, value);
+            }).finally(() => activeWrites.delete(write));
+            activeWrites.add(write);
+            return write.promise as Promise<T>;
+        },
         removeItem: (key: string) => withStore(storeName, (store) => store.removeItem(key)),
         keys: () => withStore(storeName, (store) => store.keys()),
         clear: () => withStore(storeName, (store) => store.clear()),

@@ -146,7 +146,21 @@ func (s *Service) WriteObject(resource *model.Resource, fileName string, body io
 	if strings.TrimSpace(resource.ObjectKey) == "" {
 		resource.ObjectKey = ObjectKey(resource.UserID, resource.Kind, fileName, resource.MimeType, time.Now())
 	}
-	return "", s.blobs.Write(resource.ObjectKey, body)
+	var complete func() error
+	if quota, ok := s.quota.(StreamingQuota); ok {
+		var err error
+		body, complete, err = quota.PrepareResourceWrite(resource, body)
+		if err != nil {
+			return "", err
+		}
+	}
+	if err := s.blobs.Write(resource.ObjectKey, body); err != nil {
+		return "", err
+	}
+	if complete != nil {
+		return "", complete()
+	}
+	return "", nil
 }
 
 // Retry completes a FAILED or leftover PENDING upload under the same identity.

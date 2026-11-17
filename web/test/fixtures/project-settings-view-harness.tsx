@@ -3,11 +3,18 @@ import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "antd";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 
 import { setActiveUserScope } from "../../src/lib/user-scope";
 import type { Project, ProjectDetail } from "../../src/services/api/projects";
 import { useUserStore } from "../../src/stores/use-user-store";
 import ProjectSettingsView from "../../src/pages/projects/detail/settings";
+import { setRuntimeMode } from "../../src/services/workspace-mode";
+import { activateWorkspaceSession } from "../../src/services/workspace-session";
+import { flushRegisteredPlatformDrafts, inspectRegisteredPlatformDrafts } from "../../src/services/platform-workspace-drafts";
+import { useChapterSave } from "../../src/pages/projects/detail/use-chapter-save";
+import ProjectsPage from "../../src/pages/projects";
+import { WorkspaceSidebarNav } from "../../src/components/layout/workspace-sidebar-nav";
 
 type HarnessWindow = Window & {
     __projectSettingsHarness?: {
@@ -16,10 +23,17 @@ type HarnessWindow = Window & {
         strictSetups: number;
         strictCleanups: number;
         switchProjectABA: () => void;
+        refreshCurrent: () => void;
+        inspectDrafts: () => ReturnType<typeof inspectRegisteredPlatformDrafts>;
+        flushDrafts: () => ReturnType<typeof flushRegisteredPlatformDrafts>;
     };
 };
 
 const harnessWindow = window as HarnessWindow;
+const platformMode = new URLSearchParams(window.location.search).has("platform");
+const draftScope = platformMode ? "platform:workspace-a" : "owner-a";
+setRuntimeMode(platformMode ? "platform" : "local");
+if (platformMode) activateWorkspaceSession({ mode: "platform", accountId: "owner-a", workspaceId: "workspace-a", sessionId: "test-session" });
 
 useUserStore.setState({
     hydrated: true,
@@ -32,7 +46,8 @@ useUserStore.setState({
         status: "active",
     },
 });
-setActiveUserScope("owner-a");
+if (platformMode) useUserStore.getState().setFeatures({ ...useUserStore.getState().features, generationEnabled: false });
+setActiveUserScope(draftScope);
 
 const queryClient = new QueryClient({
     defaultOptions: {
@@ -101,6 +116,9 @@ harnessWindow.__projectSettingsHarness = {
     strictSetups: 0,
     strictCleanups: 0,
     switchProjectABA: () => {},
+    refreshCurrent: () => {},
+    inspectDrafts: () => inspectRegisteredPlatformDrafts(draftScope),
+    flushDrafts: () => flushRegisteredPlatformDrafts(draftScope),
 };
 
 function Harness() {
@@ -138,15 +156,51 @@ function Harness() {
                 setDetail((current) => current.project.id === project.id ? { ...current, project: { ...current.project, ...project } } : current);
             });
     };
+    harnessWindow.__projectSettingsHarness!.refreshCurrent = refreshProject;
 
     return (
         <div>
             <div data-testid="project-id">{detail.project.id}</div>
             <div data-testid="project-status">{detail.project.status}</div>
+            <div data-testid="project-revision">{detail.project.revision}</div>
             <div data-testid="refresh-count">{harnessWindow.__projectSettingsHarness!.refreshCount}</div>
             <ProjectSettingsView detail={detail} refreshProject={refreshProject} onCreateCanvas={() => {}} />
         </div>
     );
+}
+
+function ChapterHarness() {
+    const [title, setTitle] = useState("第一章");
+    const [sourceText, setSourceText] = useState("<p>原正文</p>");
+    const [dirty, setDirty] = useState(false);
+    const [revision, setRevision] = useState(1);
+    const save = useChapterSave({
+        projectId: "project-a", unitId: "unit-a", title, sourceText, status: "ready", expectedRevision: revision, dirty,
+        onSaved: (nextRevision, unchanged) => { setRevision(nextRevision); if (unchanged) setDirty(false); },
+        refreshProject: () => { harnessWindow.__projectSettingsHarness!.refreshCount += 1; },
+    });
+    return <div>
+        <div data-testid="project-id">project-a</div>
+        <div data-testid="chapter-revision">{revision}</div>
+        <label>章节标题<input value={title} onChange={(event) => { setTitle(event.target.value); setDirty(true); }} /></label>
+        <label>章节正文<textarea value={sourceText} onChange={(event) => { setSourceText(event.target.value); setDirty(true); }} /></label>
+        <button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>{dirty ? "保存章节" : "章节已保存"}</button>
+    </div>;
+}
+
+function ProjectLibraryHarness() {
+    const { pathname } = useLocation();
+    return <div>
+        <div data-testid="project-id">project-a</div>
+        <div data-testid="route-path">{pathname}</div>
+        <aside style={{ width: 240 }}><WorkspaceSidebarNav collapsed={false} onNavigate={() => undefined} onOpenSearch={() => undefined} onExpand={() => undefined} onCollapse={() => undefined} /></aside>
+        <Routes>
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/projects/:id/overview" element={<div>项目创建完成</div>} />
+            <Route path="/canvas" element={<div>画布列表</div>} />
+            <Route path="/assets" element={<div>素材列表</div>} />
+        </Routes>
+    </div>;
 }
 
 watchToasts();
@@ -154,7 +208,7 @@ createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
             <App>
-                <Harness />
+                {new URLSearchParams(window.location.search).has("library") ? <MemoryRouter initialEntries={["/projects"]}><ProjectLibraryHarness /></MemoryRouter> : new URLSearchParams(window.location.search).has("chapter") ? <ChapterHarness /> : <Harness />}
             </App>
         </QueryClientProvider>
     </StrictMode>,

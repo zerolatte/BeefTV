@@ -7,6 +7,8 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { usePluginSlot } from "@/lib/plugins/slot-registry";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
 
 type PaletteEntry = {
     id: string;
@@ -25,14 +27,15 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
     const [highlight, setHighlight] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
     const pluginCommandEntries = usePluginSlot("app.command");
-    const pluginCenterEnabled = useUserStore((state) => state.features.pluginCenterEnabled);
+    const features = useUserStore((state) => state.features);
+    const localMode = isLocalWorkspaceMode();
 
     const entries = useMemo<PaletteEntry[]>(() => {
         const toolEntry = (slug: string, to?: string): PaletteEntry => {
             const tool = navigationTools.find((item) => item.slug === slug);
             return { id: slug, title: tool?.label ?? slug, icon: tool?.icon ?? Home, to };
         };
-        const pluginEntries: PaletteEntry[] = pluginCommandEntries.map((entry) => ({
+        const pluginEntries: PaletteEntry[] = (isWorkspaceFeatureEnabled("pluginsEnabled", features, localMode) ? pluginCommandEntries : []).map((entry) => ({
             id: `plugin:${entry.entryId}`,
             title: entry.payload.title,
             keywords: entry.payload.keywords,
@@ -44,15 +47,15 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
         }));
         return [
             { id: "home", title: "首页", icon: Home, to: "/" },
-            toolEntry("projects", "/project"),
+            { ...toolEntry("projects", localMode ? "/project" : "/projects"), title: "项目" },
             toolEntry("canvas", "/canvas"),
             toolEntry("assets", "/assets"),
-            toolEntry("skills", "/skills"),
-            ...(pluginCenterEnabled ? [toolEntry("plugins", "/plugins")] : []),
-            toolEntry("settings", "/settings"),
+            ...(isWorkspaceFeatureEnabled("skillsEnabled", features, localMode) ? [toolEntry("skills", "/skills")] : []),
+            ...(isWorkspaceFeatureEnabled("pluginCenterEnabled", features, localMode) ? [toolEntry("plugins", "/plugins")] : []),
+            ...(localMode ? [toolEntry("settings", "/settings")] : []),
             ...pluginEntries,
         ];
-    }, [pluginCenterEnabled, pluginCommandEntries]);
+    }, [features, localMode, pluginCommandEntries]);
 
     const filtered = useMemo(() => {
         const keyword = query.trim().toLowerCase();

@@ -308,3 +308,10 @@ export function resetCanvasOperationJournalMemory() {
     journalLocks.clear();
     journalStorageDelay = null;
 }
+
+export async function clearCanvasOperationJournalMemoryForScope(scope: string) {
+    const prefix = `${scope}\0`;
+    await Promise.all([...journalLocks].filter(([key]) => key.startsWith(prefix)).map(([, pending]) => pending));
+    for (const key of memory.keys()) if (key.startsWith(prefix)) memory.delete(key);
+    for (const key of journalLocks.keys()) if (key.startsWith(prefix)) journalLocks.delete(key);
+}

@@ -5,7 +5,6 @@ import { useAccountFileStorageUsage } from "@/hooks/use-account-file-storage-usa
 import { accountStorageMeter } from "@/lib/account-storage-usage";
 import { cn } from "@/lib/utils";
 import { preloadWorkspaceRoute } from "@/lib/workspace-route-modules";
-import { useUserStore } from "@/stores/use-user-store";
 import { isLocalWorkspaceMode } from "@/services/workspace-mode";
 
 function StorageGlyph() {
@@ -18,9 +17,7 @@ function StorageGlyph() {
 
 export function WorkspaceSidebarStorageMeter({ collapsed }: { collapsed: boolean }) {
     const query = useAccountFileStorageUsage();
-    const storageMode = useUserStore((state) => state.storageMode);
-    const user = useUserStore((state) => state.user);
-    const localMode = isLocalWorkspaceMode() || storageMode === "local" || user?.username === "local";
+    const localMode = isLocalWorkspaceMode();
     const meter = accountStorageMeter(query.data);
     const usedText = query.data ? `${localMode ? "本地已用" : "已用"} ${meter.usedLabel}` : query.isError ? "容量暂不可用" : "正在统计容量";
     const remainingText = query.data ? (meter.full ? "容量已满" : `剩余 ${meter.remainingLabel}`) : "";

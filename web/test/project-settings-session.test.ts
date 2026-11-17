@@ -1,13 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-import { shouldApplyProjectSettingsMutation } from "@/pages/projects/detail/project-settings-session";
+import { sameProjectSettingsDraft, shouldApplyProjectSettingsMutation } from "@/pages/projects/detail/project-settings-session";
 
-const read = (path: string) => readFileSync(join(dirname(fileURLToPath(import.meta.url)), "../src", path), "utf8");
 
 describe("project settings mutation identity", () => {
+    test("草稿仅在全部已编辑字段与保存结果一致时变为干净", () => {
+        const saved = { name: "项目甲", description: "", aspectRatio: "9:16", sourceType: "blank", stylePresetId: "" };
+        expect(sameProjectSettingsDraft({ ...saved, defaultImageModel: "" }, saved)).toBe(true);
+        expect(sameProjectSettingsDraft({ ...saved, description: "保存期间继续输入" }, saved)).toBe(false);
+        expect(sameProjectSettingsDraft({ ...saved, defaultVideoModel: "另一模型" }, saved)).toBe(false);
+    });
     test("same mounted project can apply success and ordinary errors", () => {
         expect(shouldApplyProjectSettingsMutation({
             mountedProjectId: "project-a",
@@ -31,15 +33,4 @@ describe("project settings mutation identity", () => {
             mounted: false,
         })).toBe(false);
     });
-});
-
-test("settings page remounts on project and binds save, archive, and cover mutations to the mounted project", () => {
-    const settings = read("pages/projects/detail/settings.tsx");
-    expect(settings).toContain("key={props.detail.project.id}");
-    expect(settings).toContain("const [mountedProjectId] = useState(project.id)");
-    expect(settings).toContain("updateProject(input.projectId, input.payload)");
-    expect(settings).toContain("updateProject(input.projectId, { status: input.status })");
-    expect(settings).toContain("coverMutation.mutate({ coverResourceId: \"\", projectId: mountedProjectId })");
-    expect(settings).toContain("coverMutation.mutateAsync({ coverResourceId: resourceId, projectId: mountedProjectId })");
-    expect(settings).toContain("shouldApplyProjectSettingsMutation");
 });

@@ -135,7 +135,10 @@ func (s *Service) ReplaceProjectCharacterRepresentations(userID string, projectI
 		roles[role] = struct{}{}
 		resourceID := strings.TrimSpace(input.ResourceID)
 		resource, resourceErr := s.repo.ResourceForUser(userID, resourceID)
-		if resourceErr != nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+		if resourceErr != nil {
+			return CharacterDetail{}, resourceErr
+		}
+		if resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
 			return CharacterDetail{}, kernel.BadAuthRequest("角色形象资源不可用")
 		}
 		metadata, marshalErr := json.Marshal(input.Metadata)
@@ -159,7 +162,10 @@ func (s *Service) BindCharacterTurnaround(userID, projectID, assetID, taskID, re
 		return err
 	}
 	resource, err := s.repo.ResourceForUser(userID, resourceID)
-	if err != nil || resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
+	if err != nil {
+		return err
+	}
+	if resource.Kind != "image" || resource.Status != model.ResourceStatusReady {
 		return kernel.BadAuthRequest("三视图任务生成的图片资源不可用")
 	}
 	sheetMetadata, err := json.Marshal(map[string]any{"prompt": prompt, "source": "character_turnaround"})
@@ -209,7 +215,10 @@ func (s *Service) BindProjectCharacterVoice(userID string, projectID string, ass
 	sampleResourceID := strings.TrimSpace(req.SampleResourceID)
 	if sampleResourceID != "" {
 		resource, resourceErr := s.repo.ResourceForUser(userID, sampleResourceID)
-		if resourceErr != nil || resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !SupportedVoiceSampleMimeType(resource.MimeType) {
+		if resourceErr != nil {
+			return CharacterDetail{}, resourceErr
+		}
+		if resource == nil || resource.Kind != "audio" || resource.Status != model.ResourceStatusReady || !SupportedVoiceSampleMimeType(resource.MimeType) {
 			return CharacterDetail{}, kernel.BadAuthRequest("请选择已上传完成的支持格式音频：MP3、WAV、M4A/AAC、FLAC、OGG/Opus 或 WebM")
 		}
 		var profileErr error
@@ -229,7 +238,10 @@ func (s *Service) BindProjectCharacterVoice(userID string, projectID string, ass
 		}
 	} else {
 		profile, err = s.repo.VoiceProfileForUser(userID, strings.TrimSpace(req.VoiceProfileID))
-		if err != nil || profile == nil || profile.Status != "active" {
+		if err != nil {
+			return CharacterDetail{}, err
+		}
+		if profile == nil || profile.Status != "active" {
 			return CharacterDetail{}, kernel.BadAuthRequest("选择的声音素材不可用")
 		}
 	}

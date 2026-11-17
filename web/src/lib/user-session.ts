@@ -1,6 +1,6 @@
 import { localForageStorage } from "@/lib/localforage-storage";
 import { normalizeLocalAsset, normalizeLocalCanvasProject } from "@/lib/local-workspace-migration";
-import { scopedLocalStorage, setWorkspaceStorageScope } from "@/lib/user-scope";
+import { platformWorkspaceStorageScope, scopedLocalStorage, setActiveUserScope, setWorkspaceStorageScope } from "@/lib/user-scope";
 import { CANVAS_HISTORY_STORE_KEY, useCanvasHistoryStore } from "@/stores/canvas/use-canvas-history-store";
 import { CANVAS_STORE_KEY, flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { ASSET_STORE_KEY, flushAssetStorePersistence, useAssetStore } from "@/stores/use-asset-store";
@@ -12,6 +12,10 @@ import { defaultFeatureAvailability, useUserStore } from "@/stores/use-user-stor
 import type { WorkspaceBootstrapPayload } from "@/services/api/workspace";
 import { setWorkspaceCapabilitySnapshot } from "@/services/workspace-mode";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
+import { activateWorkspaceSession, isWorkspaceSessionCurrent } from "@/services/workspace-session";
+import { setRuntimeMode } from "@/services/workspace-mode";
+import type { PlatformWorkspaceBootstrap } from "@/services/api/platform-auth";
+import { activatePlatformWorkspaceCacheScope } from "@/services/platform-workspace-cleanup";
 
 /**
  * Hydrate the one implicit local workspace. This is deliberately not an auth
@@ -23,6 +27,8 @@ export async function applyUserSession(payload: WorkspaceBootstrapPayload) {
 }
 
 async function hydrateLocalWorkspace(payload: WorkspaceBootstrapPayload) {
+    setRuntimeMode("local");
+    activateWorkspaceSession({ mode: "local", workspaceId: payload.workspace.id });
     useUserStore.getState().setHydrated(false);
     setWorkspaceCapabilitySnapshot({
         contractVersion: payload.contractVersion,
@@ -80,6 +86,83 @@ async function hydrateLocalWorkspace(payload: WorkspaceBootstrapPayload) {
     } finally {
         useUserStore.getState().setHydrated(true);
     }
+}
+
+export async function applyPlatformUserSession(payload: PlatformWorkspaceBootstrap) {
+    await withGenerationConsumersPaused(async () => {
+        const workspaceId = payload.workspace.id;
+        const account = payload.account;
+        if (account.status !== "active" || account.workspaceId !== workspaceId) throw new Error("平台账号与工作区不匹配");
+        if (!payload.instanceId || payload.instanceId !== useUserStore.getState().platformInstanceId) throw new Error("平台实例在引导期间发生变化");
+        const session = activateWorkspaceSession({ mode: "platform", accountId: account.id, workspaceId, sessionId: payload.sessionId });
+        const assertCurrent = () => {
+            if (!isWorkspaceSessionCurrent(session)) throw new DOMException("工作区会话已变更", "AbortError");
+        };
+        setRuntimeMode("platform", payload.instanceId);
+        useUserStore.getState().setHydrated(false);
+        setWorkspaceCapabilitySnapshot({
+            contractVersion: payload.contractVersion,
+            profile: "platform",
+            capabilities: payload.capabilities,
+        });
+        await Promise.all([flushCanvasStorePersistence(), flushAssetStorePersistence()]);
+        assertCurrent();
+        const scope = platformWorkspaceStorageScope(workspaceId);
+        activatePlatformWorkspaceCacheScope(scope);
+        setActiveUserScope(scope);
+
+        usePluginStore.setState({ hydrated: true, runtimeStatuses: {}, pluginStates: {}, installations: [] });
+        useUserStore.getState().setUser({
+            id: account.id,
+            workspaceId,
+            username: account.username,
+            displayName: account.displayName,
+            role: account.role,
+            status: account.status,
+            createdAt: account.createdAt,
+            updatedAt: account.updatedAt,
+        });
+        useUserStore.getState().setStorageMode("remote");
+        useUserStore.getState().setRuntimeLimits({ activeTaskLimit: 0, resourceUploadMB: 0, recycleBinRetentionDays: 0 });
+        useUserStore.getState().setFeatures({
+            shortDramaEnabled: payload.features.shortDrama,
+            taskCenterEnabled: false,
+            customChannelsEnabled: false,
+            frontendModelsEnabled: false,
+            pluginCenterEnabled: false,
+            systemPluginsVisibleToUsers: false,
+            assistantEnabled: false,
+            proposalEnabled: false,
+            pluginsEnabled: false,
+            skillsEnabled: false,
+            eagleEnabled: false,
+            localAgentEnabled: false,
+            creationEnabled: false,
+            generationEnabled: false,
+        });
+
+        const [persistedCanvas, persistedCanvasHistory, persistedAssets] = await Promise.all([
+            localForageStorage.getItem(CANVAS_STORE_KEY),
+            localForageStorage.getItem(CANVAS_HISTORY_STORE_KEY),
+            localForageStorage.getItem(ASSET_STORE_KEY),
+        ]);
+        assertCurrent();
+        const persistedPreferences = scopedLocalStorage.getItem(CREATION_PREFERENCES_STORE_KEY);
+        await Promise.all([
+            useCanvasStore.persist.rehydrate(),
+            useCanvasHistoryStore.persist.rehydrate(),
+            useAssetStore.persist.rehydrate(),
+            useCreationPreferencesStore.persist.rehydrate(),
+        ]);
+        assertCurrent();
+        if (!persistedCanvas) useCanvasStore.setState({ projects: [] });
+        if (!persistedCanvasHistory) useCanvasHistoryStore.setState({ deletedProjects: [] });
+        if (!persistedAssets) useAssetStore.setState({ assets: [] });
+        if (!persistedPreferences) useCreationPreferencesStore.setState({ preferences: {}, hydrated: true });
+        useConfigStore.getState().replaceConfig({ ...defaultConfig, channels: [] });
+        useUserStore.getState().setAuthState("authenticated");
+        useUserStore.getState().setHydrated(true);
+    });
 }
 
 /** Strip legacy hosted channel snapshots before local provider config is used. */

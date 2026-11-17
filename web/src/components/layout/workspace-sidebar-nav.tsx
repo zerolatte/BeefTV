@@ -21,6 +21,8 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { getDesktopAppBinding } from "@/services/desktop-runtime";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { OnboardingEntry } from "@/components/onboarding/first-creation-guide";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -44,23 +46,23 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
     return { id: slug, title: tool?.label ?? slug, icon: tool?.icon, to };
 }
 
-function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+function buildNav(features: FeatureAvailability, localMode: boolean): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
-                { id: "new", title: "新建项目", icon: Plus, to: "/canvas?mode=new" },
+                { id: "new", title: "新建项目", icon: Plus, to: localMode ? "/canvas?mode=new" : "/projects?create=1" },
             ],
         },
         {
             items: [
                 { id: "home", title: "首页", icon: Home, to: "/" },
-                { ...toolItem("canvas", "/project"), title: "项目" },
-                { ...toolItem("assets", "/assets"), title: "资产" },
-                { ...toolItem("skills", "/skills"), title: "技能" },
-                ...(features.pluginCenterEnabled ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
-                { id: "settings:channels", title: "模型配置", icon: Settings2, to: "/settings?section=channels" },
-                { id: "settings:storage", title: "存储设置", icon: HardDrive, to: "/settings?section=storage" },
-                { id: "agents", title: "BeefTV MCP", icon: Plug, to: "/agents" },
+                ...(localMode ? [{ ...toolItem("canvas", "/project"), title: "项目" }] : [{ ...toolItem("projects", "/projects"), title: "项目" }, toolItem("canvas", "/canvas")]),
+                { ...toolItem("assets", "/assets"), title: localMode ? "资产" : "素材" },
+                ...(isWorkspaceFeatureEnabled("skillsEnabled", features, localMode) ? [{ ...toolItem("skills", "/skills"), title: "技能" }] : []),
+                ...(isWorkspaceFeatureEnabled("pluginCenterEnabled", features, localMode) ? [{ ...toolItem("plugins", "/plugins"), title: "插件" }] : []),
+                ...(isWorkspaceFeatureEnabled("customChannelsEnabled", features, localMode) ? [{ id: "settings:channels", title: "模型配置", icon: Settings2, to: "/settings?section=channels" }] : []),
+                ...(localMode ? [{ id: "settings:storage", title: "存储设置", icon: HardDrive, to: "/settings?section=storage" }] : []),
+                ...(isWorkspaceFeatureEnabled("localAgentEnabled", features, localMode) ? [{ id: "agents", title: "BeefTV MCP", icon: Plug, to: "/agents" }] : []),
             ],
         },
     ];
@@ -265,13 +267,15 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
     const { pathname } = useLocation();
     const [searchParams] = useSearchParams();
     const features = useUserStore((state) => state.features);
+    const localMode = isLocalWorkspaceMode();
+    const pluginsEnabled = isWorkspaceFeatureEnabled("pluginsEnabled", features, localMode);
     useEffect(() => {
-        syncActiveClientPlugins();
-    }, []);
+        if (pluginsEnabled) syncActiveClientPlugins();
+    }, [pluginsEnabled]);
     const pluginSidebarEntries = usePluginSlot("app.sidebar");
-    const { groups: baseGroups, footer } = useMemo(() => buildNav(features), [features]);
+    const { groups: baseGroups, footer } = useMemo(() => buildNav(features, localMode), [features, localMode]);
     const groups = useMemo(() => {
-        if (!pluginSidebarEntries.length) return baseGroups;
+        if (!pluginsEnabled || !pluginSidebarEntries.length) return baseGroups;
         return [
             ...baseGroups,
             {
@@ -284,11 +288,11 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                 })),
             },
         ];
-    }, [baseGroups, pluginSidebarEntries]);
+    }, [baseGroups, pluginSidebarEntries, pluginsEnabled]);
 
     const rawSlug = pathname.split("/").filter(Boolean)[0] || "home";
-    // `/project` is the LibTV-compatible alias for the existing canvas library route.
-    const slug = rawSlug === "project" ? "canvas" : rawSlug;
+    // 本地项目库仍是画布别名；平台项目与画布保持独立导航身份。
+    const slug = rawSlug === "project" || rawSlug === "projects" ? localMode ? "canvas" : "projects" : rawSlug;
     const section = searchParams.get("section");
     const matchedPluginNav = pluginSidebarEntries.find((entry) => pathname === entry.payload.path || pathname.startsWith(`${entry.payload.path}/`));
     const activeId = matchedPluginNav ? matchedPluginNav.payload.id : slug === "settings" && section ? `settings:${section}` : slug;
@@ -325,7 +329,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <OnboardingEntry compact={collapsed} />
+                {localMode ? <OnboardingEntry compact={collapsed} /> : null}
                 {footer.length ? (
                     <div className="flex flex-col gap-0.5">
                         {footer.map((item) => (
@@ -335,7 +339,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                 ) : null}
                 <WorkspaceSidebarSocialLinks collapsed={collapsed} onExpand={onExpand} />
                 <div className={cn("app-workspace-sidebar-utility-row", collapsed && "is-collapsed")}>
-                    <WorkspaceSidebarUpdate collapsed={collapsed} leading={<WorkspaceSidebarAccount collapsed={collapsed} />} />
+                    {localMode ? <WorkspaceSidebarUpdate collapsed={collapsed} leading={<WorkspaceSidebarAccount collapsed={collapsed} />} /> : <WorkspaceSidebarAccount collapsed={collapsed} />}
                     <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"} title={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"} className="app-workspace-theme-action">
                         {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
                     </AnimatedThemeToggler>

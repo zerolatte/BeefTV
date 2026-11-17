@@ -9,7 +9,7 @@ import (
 // Keep the lock beside the workspace so copying or deleting its contents cannot
 // replace the locked inode. All local runtimes must acquire it before opening DB.
 func Lock(path string) (*os.File, error) {
-	path, err := canonical(path)
+	path, err := CanonicalDirectory(path)
 	if err != nil {
 		return nil, err
 	}
@@ -33,11 +33,11 @@ func LockFile(path string) (*os.File, error) {
 }
 
 func Overlaps(left, right string) (bool, error) {
-	left, err := canonical(left)
+	left, err := CanonicalDirectory(left)
 	if err != nil {
 		return false, err
 	}
-	right, err = canonical(right)
+	right, err = CanonicalDirectory(right)
 	if err != nil {
 		return false, err
 	}

@@ -213,8 +213,11 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 	canvasID := strings.TrimSpace(req.CanvasID)
 	if task.ProjectID != projectID {
 		canvas, canvasErr := s.repo.CanvasProjectForUser(userID, task.ProjectID)
-		if canvasErr != nil || canvas.ProjectID != projectID {
-			return model.WorkflowStepInstance{}, kernel.BadAuthRequest("任务不属于当前项目")
+		if canvasErr != nil {
+			return model.WorkflowStepInstance{}, canvasErr
+		}
+		if canvas.ProjectID != projectID {
+			return model.WorkflowStepInstance{}, gorm.ErrRecordNotFound
 		}
 		if canvasID != "" && canvasID != canvas.ID {
 			return model.WorkflowStepInstance{}, kernel.BadAuthRequest("任务画布与产物画布不一致")
@@ -223,8 +226,11 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 	}
 	if canvasID != "" {
 		canvas, canvasErr := s.repo.CanvasProjectForUser(userID, canvasID)
-		if canvasErr != nil || canvas.ProjectID != projectID {
-			return model.WorkflowStepInstance{}, kernel.BadAuthRequest("画布不属于当前项目")
+		if canvasErr != nil {
+			return model.WorkflowStepInstance{}, canvasErr
+		}
+		if canvas.ProjectID != projectID {
+			return model.WorkflowStepInstance{}, gorm.ErrRecordNotFound
 		}
 	}
 	if task.Status != model.TaskStatusSucceeded {
@@ -248,7 +254,7 @@ func (s *Service) RegisterTaskOutput(userID string, projectID string, stepID str
 		if unitID == "" {
 			unitID = shot.UnitID
 		} else if unitID != shot.UnitID {
-			return model.WorkflowStepInstance{}, kernel.BadAuthRequest("镜头不属于指定章节")
+			return model.WorkflowStepInstance{}, gorm.ErrRecordNotFound
 		}
 	} else if unitID != "" {
 		if _, err := s.repo.ProjectUnit(projectID, unitID); err != nil {

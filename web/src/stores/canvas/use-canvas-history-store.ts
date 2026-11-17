@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useUserStore } from "@/stores/use-user-store";
 import { persist, type PersistStorage } from "zustand/middleware";
 import { localForageStorageForScope } from "@/lib/localforage-storage";
 import type { CanvasProject } from "@/stores/canvas/use-canvas-store";
@@ -64,6 +65,7 @@ export const useCanvasHistoryStore = create<CanvasHistoryStore>()(
         }),
         {
             name: CANVAS_HISTORY_STORE_KEY,
+            skipHydration: useUserStore.getState().runtimeMode === "platform",
             storage: historyStorage,
         },
     ),

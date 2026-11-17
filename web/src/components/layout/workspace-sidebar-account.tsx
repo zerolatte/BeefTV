@@ -5,8 +5,26 @@ import { useBeefTVConnection } from "@/components/layout/beeftv-connection-provi
 import { AccountSettingsModal } from "@/components/account-settings/account-settings-modal";
 import { cn } from "@/lib/utils";
 import { isBeefTVAuthenticated } from "@/services/api/beeftv-connection";
+import { useUserStore } from "@/stores/use-user-store";
+import { WorkspaceAccountMenu } from "@/components/layout/workspace-account-menu";
 
 export function WorkspaceSidebarAccount({ collapsed }: { collapsed: boolean }) {
+    const mode = useUserStore((state) => state.runtimeMode);
+    if (mode === "platform") return <PlatformSidebarAccount collapsed={collapsed} />;
+    return <LocalSidebarAccount collapsed={collapsed} />;
+}
+
+function PlatformSidebarAccount({ collapsed }: { collapsed: boolean }) {
+    const user = useUserStore((state) => state.user);
+    return (
+        <div className="flex min-h-11 min-w-0 items-center gap-2 px-2 py-1">
+            <WorkspaceAccountMenu />
+            {!collapsed && user ? <span className="min-w-0 truncate text-[14px] leading-[22px]" style={{ color: "var(--user-ink)" }} title={user.displayName || user.username}>{user.displayName || user.username}</span> : null}
+        </div>
+    );
+}
+
+function LocalSidebarAccount({ collapsed }: { collapsed: boolean }) {
     const [open, setOpen] = useState(false);
     const account = useBeefTVConnection();
     const { connection, loading } = account;

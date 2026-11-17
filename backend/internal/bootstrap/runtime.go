@@ -26,6 +26,7 @@ import (
 	"infinite-canvas/backend/internal/depthcapture"
 	"infinite-canvas/backend/internal/eagle"
 	canvasHandler "infinite-canvas/backend/internal/handler"
+	"infinite-canvas/backend/internal/identity"
 	"infinite-canvas/backend/internal/localapp"
 	"infinite-canvas/backend/internal/modelcatalog"
 	"infinite-canvas/backend/internal/pluginhost"
@@ -42,7 +43,7 @@ import (
 )
 
 type Runtime struct {
-	workspaceLock    *os.File
+	workspaceLock    *runtimeinfo.WorkspaceLock
 	cfg              Config
 	db               *gorm.DB
 	service          *app.Service
@@ -80,22 +81,24 @@ func Open(_ context.Context, raw Config) (result *Runtime, openErr error) {
 		}
 	}
 	reportPhase("lock", "正在检查工作区目录与实例锁")
-	if err := os.MkdirAll(cfg.DataDir, 0o755); err != nil {
+	runtimeDirectory, err := database.PrepareRuntimeDirectory(cfg.DataDir, identity.ModeLocal)
+	if err != nil {
 		return nil, err
 	}
-	var workspaceLock *os.File
-	if cfg.Profile == ProfileDesktop {
-		var err error
-		workspaceLock, err = runtimeinfo.LockWorkspace(cfg.DataDir)
-		if err != nil {
-			return nil, err
-		}
-		defer func() {
-			if openErr != nil {
-				_ = workspaceLock.Close()
-			}
-		}()
+	cfg.DataDir = runtimeDirectory.CanonicalPath()
+	if err := runtimeDirectory.ValidateDatabaseDSN(cfg.DatabaseURL); err != nil {
+		return nil, err
 	}
+	// 本地服务与桌面共同参与停写屏障，导入和备份才能可靠排除仍在运行的写入者。
+	workspaceLock, err := runtimeinfo.LockWorkspace(cfg.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if openErr != nil {
+			_ = workspaceLock.Close()
+		}
+	}()
 	reportPhase("database", "正在打开本地数据库")
 	db, err := database.Open(database.Config{Driver: cfg.DatabaseDriver, DSN: cfg.DatabaseURL, DataDir: cfg.DataDir})
 	if err != nil {
@@ -107,6 +110,10 @@ func Open(_ context.Context, raw Config) (result *Runtime, openErr error) {
 		}
 	}
 	if err := database.ConfigurePool(db); err != nil {
+		cleanupDB()
+		return nil, err
+	}
+	if err := runtimeDirectory.CheckDatabase(db); err != nil {
 		cleanupDB()
 		return nil, err
 	}

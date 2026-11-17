@@ -56,24 +56,24 @@ func shouldCaptureSnapshot(last model.CanvasSnapshot, err error, beforeRevision 
 	return err == nil && last.Revision != beforeRevision && (force || !last.CreatedAt.After(cutoff))
 }
 
-func (r *Repository) ShouldCaptureCanvasSnapshot(canvasID string, beforeRevision int64, cutoff time.Time, force bool) (bool, error) {
+func (r *Repository) ShouldCaptureCanvasSnapshot(userID, canvasID string, beforeRevision int64, cutoff time.Time, force bool) (bool, error) {
 	if force {
 		return true, nil
 	}
 	var last model.CanvasSnapshot
-	err := r.db.Select("id", "revision", "created_at").Where("canvas_id = ?", canvasID).Order("revision DESC").First(&last).Error
+	err := r.db.Select("id", "revision", "created_at").Where("canvas_id = ? AND user_id = ?", canvasID, userID).Order("revision DESC").First(&last).Error
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, err
 	}
 	return shouldCaptureSnapshot(last, err, beforeRevision, cutoff, force), nil
 }
 
-func (r *Repository) ReadyResourceIDs(ids []string) ([]string, error) {
+func (r *Repository) ReadyResourceIDs(userID string, ids []string) ([]string, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
 	var ready []string
-	err := r.db.Model(&model.Resource{}).Select("id").Where("id IN ? AND status = ?", ids, model.ResourceStatusReady).Order("id").Pluck("id", &ready).Error
+	err := r.db.Model(&model.Resource{}).Select("id").Where("user_id = ? AND id IN ? AND status = ?", userID, ids, model.ResourceStatusReady).Order("id").Pluck("id", &ready).Error
 	return ready, err
 }
 
@@ -82,6 +82,9 @@ func (r *Repository) ReadyResourceIDs(ids []string) ([]string, error) {
 func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapshot *model.CanvasSnapshot, resourceIDs, restoredResourceIDs []string, cutoff time.Time, limit int, force bool) error {
 	next := *project
 	err := r.db.Transaction(func(tx *gorm.DB) error {
+		if snapshot != nil && (snapshot.UserID != next.UserID || snapshot.CanvasID != next.ID) {
+			return gorm.ErrRecordNotFound
+		}
 		if err := requireLiveCanvasLibraryFolder(tx, next.UserID, next.LibraryFolderID); err != nil {
 			return err
 		}
@@ -92,7 +95,7 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 			return nil
 		}
 		var last model.CanvasSnapshot
-		err := tx.Select("id", "revision", "created_at").Where("canvas_id = ?", project.ID).Order("revision DESC").First(&last).Error
+		err := tx.Select("id", "revision", "created_at").Where("canvas_id = ? AND user_id = ?", project.ID, project.UserID).Order("revision DESC").First(&last).Error
 		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return err
 		}
@@ -105,7 +108,7 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 		requiredIDs = slices.Compact(requiredIDs)
 		if len(requiredIDs) > 0 {
 			var resources []model.Resource
-			query := tx.Select("id").Where("id IN ? AND status = ?", requiredIDs, model.ResourceStatusReady).Order("id")
+			query := tx.Select("id").Where("user_id = ? AND id IN ? AND status = ?", project.UserID, requiredIDs, model.ResourceStatusReady).Order("id")
 			if err := query.Find(&resources).Error; err != nil {
 				return err
 			}
@@ -129,7 +132,7 @@ func (r *Repository) SaveCanvasWithSnapshot(project *model.CanvasProject, snapsh
 			}
 		}
 		var expired []string
-		if err := tx.Model(&model.CanvasSnapshot{}).Where("canvas_id = ?", project.ID).Order("revision DESC").Offset(limit).Limit(100).Pluck("id", &expired).Error; err != nil {
+		if err := tx.Model(&model.CanvasSnapshot{}).Where("canvas_id = ? AND user_id = ?", project.ID, project.UserID).Order("revision DESC").Offset(limit).Limit(100).Pluck("id", &expired).Error; err != nil {
 			return err
 		}
 		return deleteCanvasSnapshots(tx, expired)
@@ -148,6 +151,9 @@ func (r *Repository) SaveAssetsAndCanvasWithSnapshot(items []model.Asset, projec
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		scoped := New(tx)
 		for index := range items {
+			if items[index].UserID != next.UserID {
+				return gorm.ErrRecordNotFound
+			}
 			if err := scoped.UpsertAsset(&items[index]); err != nil {
 				return err
 			}
@@ -179,7 +185,7 @@ func deleteCanvasSnapshots(tx *gorm.DB, ids []string) error {
 	return tx.Where("id IN ?", ids).Delete(&model.CanvasSnapshot{}).Error
 }
 
-func (r *Repository) CanvasHistoryResourceReferences(resourceIDs []string) ([]ResourceDirectReference, error) {
+func (r *Repository) CanvasHistoryResourceReferences(userID string, resourceIDs []string) ([]ResourceDirectReference, error) {
 	refs := []ResourceDirectReference{}
 	if len(resourceIDs) == 0 {
 		return refs, nil
@@ -187,7 +193,7 @@ func (r *Repository) CanvasHistoryResourceReferences(resourceIDs []string) ([]Re
 	err := r.db.Table("canvas_snapshot_resources AS refs").
 		Select("'画布历史版本' AS kind, snapshots.canvas_id AS id, snapshots.title, refs.resource_id").
 		Joins("JOIN canvas_snapshots AS snapshots ON snapshots.id = refs.snapshot_id").
-		Where("refs.resource_id IN ?", resourceIDs).Distinct().Scan(&refs).Error
+		Where("snapshots.user_id = ? AND refs.resource_id IN ?", userID, resourceIDs).Distinct().Scan(&refs).Error
 	return refs, err
 }
 
@@ -195,16 +201,12 @@ func (r *Repository) RequireNoCanvasHistoryReferences(resourceIDs []string) erro
 	if len(resourceIDs) == 0 {
 		return nil
 	}
-	var resources []model.Resource
-	query := r.db.Select("id").Where("id IN ?", resourceIDs).Order("id")
-	if err := query.Find(&resources).Error; err != nil {
+	// 物理删除必须保护全部引用；此处仅返回布尔结论，不读取其他工作区的内容。
+	var count int64
+	if err := r.db.Model(&model.CanvasSnapshotResource{}).Where("resource_id IN ?", resourceIDs).Count(&count).Error; err != nil {
 		return err
 	}
-	refs, err := r.CanvasHistoryResourceReferences(resourceIDs)
-	if err != nil {
-		return err
-	}
-	if len(refs) > 0 {
+	if count > 0 {
 		return ErrCanvasHistoryResourceReferenced
 	}
 	return nil

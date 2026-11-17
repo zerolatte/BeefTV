@@ -1,6 +1,6 @@
 import { nanoid } from "nanoid";
 import { CanvasNodeType, type CanvasNodeData, type CanvasConnection, type Position } from "@/types/canvas";
-import type { CanvasWorkflow, WorkflowDefinition, WorkflowNode, WorkflowValue } from "@/services/api/canvas-workflows";
+import type { CanvasWorkflow, WorkflowDefinition, WorkflowNode, WorkflowRun, WorkflowValue } from "@/services/api/canvas-workflows";
 import { fitNodeSize } from "./canvas-node-size";
 import { isWorkflowOperation, workflowOperationId } from "./workflow-editor";
 import { canvasNodeResourceId } from "./canvas-resource-id";
@@ -128,9 +128,14 @@ export function workflowInstanceInputs(control: CanvasNodeData, nodes: CanvasNod
     }));
 }
 
+export function workflowRunNeedsPolling(run?: WorkflowRun) {
+    // 暂停期间仍可能交付在途结果，或由另一设备继续运行。
+    return Boolean(run && ["queued", "running", "paused"].includes(run.status));
+}
+
 export function workflowInstanceLocked(control?: CanvasNodeData) {
     const state = control?.metadata?.reusableWorkflow;
-    return Boolean(state?.intent || state?.run?.status === "queued" || state?.run?.status === "running");
+    return Boolean(state?.intent || state?.retryIntent || workflowRunNeedsPolling(state?.run));
 }
 
 export function isWorkflowMaterialSource(source: CanvasNodeData) {

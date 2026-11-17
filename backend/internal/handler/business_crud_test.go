@@ -43,7 +43,7 @@ func TestBusinessProjectAndAssetCRUD(t *testing.T) {
 	id := project["id"].(string)
 	call("GET", "/api/projects", nil)
 	call("GET", "/api/projects/"+id, nil)
-	updated := call("PATCH", "/api/projects/"+id, map[string]any{"name": "renamed"})["project"].(map[string]any)
+	updated := call("PATCH", "/api/projects/"+id, map[string]any{"name": "renamed", "expectedRevision": project["revision"]})["project"].(map[string]any)
 	if updated["name"] != "renamed" {
 		t.Fatal("project rename lost")
 	}

@@ -3,24 +3,16 @@ import { apiBaseURL } from "@/services/api/request";
 import { isDesktopShellOrigin } from "@/lib/desktop-shell";
 
 export type RuntimeSessionLike = {
-    storageMode?: "local" | "remote";
-    user?: { username?: string } | null;
+    runtimeMode?: "unknown" | "local" | "platform";
 };
 
-/**
- * Pure runtime-mode decision used by persistence and upload boundaries.
- * Local-first is the default for the desktop build; hosted mode must opt out
- * explicitly with VITE_CANVAS_LOCAL_MODE=false.
- */
-export function isLocalRuntimeModeForSession(session: RuntimeSessionLike, localFirstBuild: boolean) {
-    return localFirstBuild || session.storageMode === "local" || session.user?.username === "local";
+/** 运行模式以服务端 `/runtime` 合同为准；未知时不开放本地能力。 */
+export function isLocalRuntimeModeForSession(session: RuntimeSessionLike) {
+    return session.runtimeMode === "local";
 }
 
 export function isLocalRuntimeMode() {
-    return isLocalRuntimeModeForSession(
-        useUserStore.getState(),
-        import.meta.env.VITE_CANVAS_LOCAL_MODE !== "false",
-    );
+    return isLocalRuntimeModeForSession(useUserStore.getState());
 }
 
 /** True inside the native Wails desktop shell or when targeting the loopback Go API. */

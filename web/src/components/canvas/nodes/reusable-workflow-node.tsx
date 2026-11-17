@@ -13,7 +13,7 @@ import type { WorkflowValue } from "@/services/api/canvas-workflows";
 import type { CanvasNodeData } from "@/types/canvas";
 import { WorkflowSlotHeader, WorkflowSlotSurface } from "./workflow-slot-surface";
 
-const labels: Record<string, string> = { pending: "等待上游", queued: "已排队", running: "进行中", waiting_selection: "请选择一张图片继续", succeeded: "已完成", failed: "失败", cancelled: "已停止" };
+const labels: Record<string, string> = { pending: "等待上游", queued: "已排队", running: "进行中", paused: "已暂停", waiting_selection: "请选择一张图片继续", succeeded: "已完成", failed: "失败", cancelled: "已停止" };
 const mediaLabels = { image: "图片", video: "视频", audio: "音频", text: "文本" };
 
 function WorkflowVideo({ storageKey }: { storageKey: string }) {
@@ -73,7 +73,8 @@ export function ReusableWorkflowNode({ node, nodes, readOnly, dropTarget, onActi
     if (state) {
         const run = state.run;
         const running = run?.status === "queued" || run?.status === "running";
-        const waitingSelection = run?.status === "running" && run.steps.some(step => step.status === "waiting_selection");
+        const paused = run?.status === "paused";
+        const waitingSelection = (running || paused) && run?.steps.some(step => step.status === "waiting_selection");
         const recoverOriginal = run?.status === "failed" && !state.inputsChanged && run.steps.some(step => step.status === "failed" && state.definition.nodes.find(item => item.id === step.nodeId)?.operationId?.endsWith(".ai-upscale"));
         const ready = state.definition.nodes.filter(item => item.role === "input").filter(item => nodes.some(candidate => candidate.metadata?.workflowSlot?.instanceId === node.id && candidate.metadata.workflowSlot.nodeId === item.id && (item.mediaType === "text" || canvasNodeResourceId(candidate)))).length;
         const total = state.definition.nodes.filter(item => item.role === "input").length;
@@ -85,9 +86,9 @@ export function ReusableWorkflowNode({ node, nodes, readOnly, dropTarget, onActi
             {state.error || run?.error ? <p role="alert" className="max-h-14 overflow-auto text-lg text-destructive" data-canvas-wheel-scroll>{state.error || run?.error}</p> : null}
             <div className="flex items-center gap-3"><div role="progressbar" aria-label="工作流执行进度" aria-valuemin={0} aria-valuemax={operations.length} aria-valuenow={completed} className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-[var(--surface-active)]"><div className="h-full rounded-full bg-[var(--workspace-accent)]" style={{ width: `${operations.length ? completed / operations.length * 100 : 0}%` }} /></div><span className="shrink-0 text-lg tabular-nums text-muted-foreground">步骤 {completed}/{operations.length}</span></div>
             <div className="flex flex-wrap items-center justify-end gap-2" data-workflow-actions>
-                {onUpdate ? <Button type="text" className="mr-auto" disabled={readOnly || busy || running || Boolean(state.intent)} onClick={() => void onUpdate(node.id)}>版本 {state.templateRevision || 1} · 更新实例</Button> : null}
-                <Button size="large" style={{ fontSize: 20 }} type="primary" icon={running ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />} disabled={readOnly || busy || running || ready < total && !state.intent} loading={busy} onClick={() => { setBusy(true); void onAction(node.id, recoverOriginal ? "retry" : "start").finally(() => { if (active.current) setBusy(false); }); }}>{state.intent ? "确认上次提交" : running ? "运行中" : recoverOriginal ? "继续原任务" : run ? "重新运行" : "运行工作流"}</Button>
-                {running ? <Button icon={<Square className="size-3" />} disabled={readOnly || busy} onClick={() => void onAction(node.id, "cancel")}>停止</Button> : run?.status === "failed" && !state.inputsChanged && !recoverOriginal ? <Button icon={<RefreshCw className="size-4" />} disabled={readOnly || busy || Boolean(state.intent)} onClick={() => void onAction(node.id, "retry")}>重试失败步骤</Button> : null}
+                {onUpdate ? <Button type="text" className="mr-auto" disabled={locked || busy} onClick={() => void onUpdate(node.id)}>版本 {state.templateRevision || 1} · 更新实例</Button> : null}
+                <Button size="large" style={{ fontSize: 20 }} type="primary" icon={running ? <LoaderCircle className="size-4 animate-spin" /> : <Play className="size-4" />} disabled={readOnly || busy || running && !state.retryIntent || paused && run.reason !== "quota_exceeded" || ready < total && !state.intent && !state.retryIntent && !paused} loading={busy} onClick={() => { setBusy(true); void onAction(node.id, state.retryIntent || paused || recoverOriginal ? "retry" : "start").finally(() => { if (active.current) setBusy(false); }); }}>{state.retryIntent ? "确认上次重试" : state.intent ? "确认上次提交" : running ? "运行中" : paused ? "继续运行" : recoverOriginal ? "继续原任务" : run ? "重新运行" : "运行工作流"}</Button>
+                {running || paused || state.retryIntent ? <Button icon={<Square className="size-3" />} disabled={readOnly || busy} onClick={() => void onAction(node.id, "cancel")}>停止</Button> : run?.status === "failed" && !state.inputsChanged && !recoverOriginal ? <Button icon={<RefreshCw className="size-4" />} disabled={readOnly || busy || Boolean(state.intent)} onClick={() => void onAction(node.id, "retry")}>重试失败步骤</Button> : null}
             </div>
         </div>;
     }
@@ -104,7 +105,7 @@ export function ReusableWorkflowNode({ node, nodes, readOnly, dropTarget, onActi
     const resourceId = canvasNodeResourceId(node);
     const step = control?.metadata?.reusableWorkflow?.run?.steps.find(item => item.nodeId === slot.nodeId);
     const choices = step?.candidates?.filter(item => item.resourceId) || [];
-    const selecting = step?.status === "waiting_selection" && control?.metadata?.reusableWorkflow?.run?.status === "running";
+    const selecting = step?.status === "waiting_selection" && ["running", "paused"].includes(control?.metadata?.reusableWorkflow?.run?.status || "");
     const hasValue = slot.mediaType === "text" ? Boolean(node.metadata?.content) : Boolean(resourceId);
     const status = slot.role === "constant" ? "固定素材" : isInput ? hasValue ? "已添加" : "待添加" : labels[slot.status || "pending"] || "待运行";
     const candidates = nodes.filter(item => item.id !== node.id && item.type === slot.mediaType && item.metadata?.workflowSlot?.instanceId !== slot.instanceId && canvasNodeResourceId(item));

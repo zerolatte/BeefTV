@@ -3,10 +3,11 @@ import { Link, useLocation } from "react-router";
 
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
 
 const PAGE_TITLES: Record<string, string> = {
     home: "创作", create: "创作", projects: "项目", canvas: "自由画布",
-    assets: "资产", skills: "技能", plugins: "插件", settings: "设置",
+    assets: "资产", skills: "技能", plugins: "插件", settings: "设置", admin: "平台管理", models: "模型目录",
 };
 
 /** Compatibility workspace chrome retained for non-canvas routes. Canvas owns its own top bar. */
@@ -29,7 +30,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </nav> : <span className="app-workspace-topbar-spacer" />}
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
-                <Link to="/settings?section=channels" className="app-workspace-topbar-utility"><Settings2 /><span>模型配置</span></Link>
+                {isLocalWorkspaceMode() ? <Link to="/settings?section=channels" className="app-workspace-topbar-utility"><Settings2 /><span>模型配置</span></Link> : null}
             </div>
         </header>
     );

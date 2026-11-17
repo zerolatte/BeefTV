@@ -328,7 +328,10 @@ func (s *Service) upsertUserCanvasProjectAndPayload(userID string, raw json.RawM
 			existingBytes = int64(len([]byte(existing.PayloadJSON)))
 			project.CreatedAt = existing.CreatedAt
 		}
-		if (existing == nil && project.Revision != 0) || (existing != nil && project.Revision != existing.Revision) {
+		if existing == nil && project.Revision != 0 {
+			return kernel.NotFound("画布不存在")
+		}
+		if existing != nil && project.Revision != existing.Revision {
 			return canvasRevisionConflict()
 		}
 		payload = nil
@@ -371,10 +374,10 @@ func (s *Service) upsertUserCanvasProjectAndPayload(userID string, raw json.RawM
 					return canvasRevisionConflict()
 				}
 				if errors.Is(err, repository.ErrCanvasHistoryResourceMissing) {
-					return kernel.NewAppError(http.StatusConflict, "画布引用的素材已变化，当前内容未被覆盖，请保留草稿并重新加载")
+					return kernel.NotFound("画布引用的资源不存在，请保留草稿并重新加载")
 				}
 				if errors.Is(err, repository.ErrCanvasLibraryFolderMissing) {
-					return kernel.BadAuthRequest("画布文件夹不存在")
+					return kernel.NotFound("画布文件夹不存在")
 				}
 				return err
 			}

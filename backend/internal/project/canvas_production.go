@@ -59,12 +59,18 @@ func (s *Service) CanvasProductionContext(userID, projectID, canvasID, unitID, s
 	if canvas.ProjectID != "" && canvas.ProjectID != projectID {
 		return CanvasProductionContext{}, productionError("production_canvas_project_conflict", "画布已经属于其他项目，请先明确调整归属")
 	}
+	if _, err := s.repo.ProjectUnit(projectID, strings.TrimSpace(unitID)); err != nil {
+		return CanvasProductionContext{}, err
+	}
 	shot, err := s.repo.ShotForProject(projectID, strings.TrimSpace(shotID))
 	if err != nil {
 		return CanvasProductionContext{}, err
 	}
-	if shot.UnitID != strings.TrimSpace(unitID) || shot.CurrentRevisionID == "" {
-		return CanvasProductionContext{}, kernel.BadAuthRequest("镜头不属于所选章节或没有可用版本")
+	if shot.UnitID != strings.TrimSpace(unitID) {
+		return CanvasProductionContext{}, gorm.ErrRecordNotFound
+	}
+	if shot.CurrentRevisionID == "" {
+		return CanvasProductionContext{}, kernel.BadAuthRequest("镜头没有可用版本")
 	}
 	artifact := workflowArtifactType(stepKey)
 	if artifact == "" {

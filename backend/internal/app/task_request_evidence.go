@@ -21,10 +21,6 @@ func withTaskRequestEvidence(ctx context.Context, previous ...*model.TaskFailure
 	return bindRequestReceipts(ctx), &taskRequestEvidenceRecorder{rec}
 }
 
-func recordTaskDiagnosticInput(ctx context.Context, input canvasGenerationInput) {
-	generation.RecordTaskDiagnosticInput(ctx, input)
-}
-
 func recordTaskRequestEvidence(req *http.Request, evidence model.TaskRequestEvidence, body []byte, err error) {
 	generation.RecordTaskRequestEvidence(req, evidence, body, err)
 }

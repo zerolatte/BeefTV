@@ -6,7 +6,10 @@ let browser: Browser;
 let server: ReturnType<typeof Bun.serve>;
 beforeAll(async () => {
     const stubs: Record<string, string> = {
-        "@/stores/use-user-store": 'import { create } from "zustand"; export const useUserStore = create(set => ({ hydrated: false, setHydrated: hydrated => set({ hydrated }) }));',
+        "@/stores/use-user-store": 'import { create } from "zustand"; export const useUserStore = create(set => ({ runtimeMode: "local", hydrated: false, setHydrated: hydrated => set({ hydrated }) }));',
+        "@/services/workspace-mode": 'export const getRuntimeMode = () => "local"; export const setRuntimeMode = () => {};',
+        "@/services/api/platform-auth": 'export const getRuntimeModeContract = async () => ({ mode: "local", contractVersion: 1 });',
+        "@/components/platform/platform-auth-gate": 'export function PlatformAuthGate() { throw new Error("本地测试不应进入平台认证"); }',
         "@/stores/use-config-store": 'import { create } from "zustand"; export const useConfigStore = create(set => ({ config: { channels: [] }, replaceConfig: config => set({config}) })); export const normalizeConfigSnapshot = value => value;',
         "@/lib/user-session": 'import { useUserStore } from "@/stores/use-user-store"; export const localWorkspaceConfig = value => value; export async function applyUserSession(payload) { window.activeScope = payload.workspace.id; window.canvasProjects = []; useUserStore.getState().setHydrated(true); window.sessionReady = true; }',
         "@/services/api/workspace": 'export async function getWorkspaceBootstrap() { if (new URL(location.href).searchParams.has("fail-bootstrap")) throw new Error("unavailable"); return {workspace:{id:"canonical-workspace"}}; }',

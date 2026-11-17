@@ -63,11 +63,11 @@ func inspect(path string, migrating bool) (Usage, error) {
 }
 
 func Validate(source, target string) (string, error) {
-	source, err := canonical(source)
+	source, err := CanonicalDirectory(source)
 	if err != nil {
 		return "", err
 	}
-	target, err = canonical(target)
+	target, err = CanonicalDirectory(target)
 	if err != nil {
 		return "", err
 	}

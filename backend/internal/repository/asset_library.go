@@ -117,6 +117,7 @@ func (r *Repository) UserAssetGeneratedCounts(userID string) (total int64, kindR
 }
 
 func userAssetFilteredQuery(query *gorm.DB, filter UserAssetPageFilter, includeSearch bool) *gorm.DB {
+	query = liveAssets(query)
 	if value := strings.TrimSpace(filter.Kind); value != "" {
 		query = query.Where("kind = ?", value)
 	}

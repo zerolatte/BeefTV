@@ -12,6 +12,32 @@ const template: CanvasWorkflow = { id: "test", name: "人物替换", description
 ], edges: [{ fromNodeId: "in", toNodeId: "depth" }, { fromNodeId: "depth", toNodeId: "out" }], outputNodeIds: ["out"] } };
 const noop = () => {};
 
+test("重试响应丢失后可确认原批次，避免误发新运行", () => {
+    const graph = createWorkflowInstance(template, { x: 0, y: 0 });
+    graph.control.metadata!.reusableWorkflow!.run = { id: "run", status: "failed", steps: [] } as unknown as WorkflowRun;
+    graph.control.metadata!.reusableWorkflow!.retryIntent = { runId: "run", clientOperationId: "retry-once" };
+    const html = renderToStaticMarkup(<ReusableWorkflowNode node={graph.control} nodes={graph.nodes} readOnly={false} onAction={async () => {}} onValue={async () => {}} onUploadBusy={noop} onError={noop} />);
+    expect(html).toContain("确认上次重试");
+    expect(html).toContain("停止");
+    expect(html).not.toContain("重新运行");
+    expect(html).not.toContain("重试失败步骤");
+});
+
+test("额度暂停显示继续运行与保留的进度", () => {
+    const graph = createWorkflowInstance(template, { x: 0, y: 0 });
+    graph.control.metadata!.reusableWorkflow!.run = { id: "run", status: "paused", reason: "quota_exceeded",
+        error: "AI 点数不足，追加点数后可继续未完成步骤",
+        steps: [{ nodeId: "in", status: "succeeded" }, { nodeId: "depth", status: "succeeded" }, { nodeId: "out", status: "pending" }] } as WorkflowRun;
+    const html = renderToStaticMarkup(<ReusableWorkflowNode node={graph.control} nodes={graph.nodes} readOnly={false} onAction={async () => {}} onValue={async () => {}} onUploadBusy={noop} onError={noop} onUpdate={async () => {}} />);
+    expect(html).toContain("已暂停");
+    expect(html).toContain("继续运行");
+    expect(html).toContain("AI 点数不足，追加点数后可继续未完成步骤");
+    expect(html).toContain('aria-valuenow="1"');
+    expect(html).toContain("停止");
+    expect(html).not.toContain("重新运行");
+    expect(html).not.toContain("重试失败步骤");
+});
+
 test("workflow header sits outside the frame and keeps its screen size", () => {
     const graph = createWorkflowInstance(template, { x: 0, y: 0 });
     const html = renderToStaticMarkup(<CanvasFrameNode data={graph.frame} scale={0.25} childNodes={graph.nodes.slice(1)} isSelected={false} isDropTarget={false} readOnly onMouseDown={noop} onResize={noop} onToggleCollapsed={noop} onFolderStyleChange={noop} onTitleChange={noop} onContextMenu={noop} />);

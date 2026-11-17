@@ -4,6 +4,7 @@ import type { GenerationTask } from "@/services/api/task-center";
 import type { TimelineProject } from "@/types/timeline";
 import type { ChannelModelCatalogItem } from "@/lib/channel-model-catalog";
 import { BeefTVConnectionChangedError, getBeefTVConnectionEpoch } from "@/services/api/beeftv-connection";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 // The local backend may spend 30 seconds fetching the managed catalog before
 // admitting a cloud task. Keep a response margin without retrying submissions.
@@ -21,6 +22,7 @@ function transcriptionTransportError(error: unknown, submitting: boolean): unkno
 }
 
 export async function getTranscriptionModels(config?: HttpRequestConfig) {
+    assertGenerationAvailable();
     const connectionEpoch = getBeefTVConnectionEpoch();
     try {
         const result = await http.post<{ models: ChannelModelCatalogItem[] }>("/beeftv/connection/models", {}, { timeout: TRANSCRIPTION_ADMISSION_TIMEOUT_MS, ...config });
@@ -56,6 +58,7 @@ export async function createTimelineTranscriptionTask(
     payload: TimelineTranscriptionCreateRequest,
     config?: HttpRequestConfig,
 ): Promise<GenerationTask> {
+    assertGenerationAvailable();
     try {
         return await http.post<GenerationTask>("/timeline/transcriptions", payload, { ...(payload.model ? { timeout: TRANSCRIPTION_ADMISSION_TIMEOUT_MS } : {}), ...config });
     } catch (error) { throw transcriptionTransportError(error, true); }

@@ -1,10 +1,12 @@
 package agentops_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -41,6 +43,11 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatalf("取底层连接失败: %v", err)
 	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Errorf("关闭临时库失败: %v", err)
+		}
+	})
 	sqlDB.SetMaxOpenConns(1)
 	sqlDB.SetMaxIdleConns(1)
 	if err := database.MigrateLocalSchema(db); err != nil {
@@ -51,6 +58,16 @@ func newHarness(t *testing.T) *harness {
 	}
 	dataDir := t.TempDir()
 	service := app.NewLocal(repository.New(db), dataDir)
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := service.StopWorker(ctx); err != nil {
+			t.Errorf("停止测试后台任务失败: %v", err)
+		}
+		if err := service.Close(); err != nil {
+			t.Errorf("关闭测试服务失败: %v", err)
+		}
+	})
 	registry := agentops.NewRegistry(service, agentops.NewStore(db))
 	agentops.RegisterDefaultOps(registry)
 

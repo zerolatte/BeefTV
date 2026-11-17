@@ -159,7 +159,8 @@ func TestMoveUserAssetsRejectsForeignAsset(t *testing.T) {
 		}
 	}
 	err := lib.MoveUserAssetsToFolder("owner", MoveUserAssetsRequest{AssetIDs: []string{"asset-1", "asset-2"}, FolderID: folder.ID})
-	if err == nil || !strings.Contains(err.Error(), "部分素材不存在或不属于当前用户") {
+	var appErr *kernel.AppError
+	if !errors.As(err, &appErr) || appErr.Status != 404 {
 		t.Fatalf("error = %v", err)
 	}
 	stored, err := lib.repo.AssetForUser("owner", "asset-1")

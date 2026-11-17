@@ -55,13 +55,15 @@ type UserDailyUploadUsage struct {
 // or Committed. Day equal to UploadReservationUnattributedDay (Size 0) marks a
 // pre-witness leftover that must not reserve, refund, or be guessed from totals.
 type UserUploadReservation struct {
-	ID        string    `json:"id" gorm:"primaryKey;size:200"`
-	UserID    string    `json:"userId" gorm:"size:36;uniqueIndex:idx_user_upload_reservation_identity,priority:1"`
-	Identity  string    `json:"identity" gorm:"size:128;uniqueIndex:idx_user_upload_reservation_identity,priority:2"`
-	Day       string    `json:"day" gorm:"size:16"`
-	Size      int64     `json:"size"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID       string `json:"id" gorm:"primaryKey;size:200"`
+	UserID   string `json:"userId" gorm:"size:36;uniqueIndex:idx_user_upload_reservation_identity,priority:1"`
+	Identity string `json:"identity" gorm:"size:128;uniqueIndex:idx_user_upload_reservation_identity,priority:2"`
+	Day      string `json:"day" gorm:"size:16"`
+	Size     int64  `json:"size"`
+	// DurableOwnership 仅由已核验持久账本的适配器设置，允许未知大小的零字节预留恢复。
+	DurableOwnership bool      `json:"-" gorm:"-"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 // UploadReservationUnattributedDay marks a leftover that already has a resource
@@ -69,7 +71,7 @@ type UserUploadReservation struct {
 const UploadReservationUnattributedDay = "unattributed"
 
 func (r UserUploadReservation) Unattributed() bool {
-	return r.Day == UploadReservationUnattributedDay || r.Size <= 0
+	return r.Day == UploadReservationUnattributedDay || (r.Size <= 0 && !r.DurableOwnership)
 }
 
 type Skill struct {

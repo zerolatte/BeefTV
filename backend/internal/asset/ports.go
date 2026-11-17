@@ -70,6 +70,18 @@ type Quota interface {
 	Commit(userID string, size int64, identity string)
 }
 
+// StreamingQuota 为平台持久预留提供写流门禁；本地额度实现无需承担该合同。
+type StreamingQuota interface {
+	PrepareResourceWrite(*model.Resource, io.Reader) (io.Reader, func() error, error)
+	ReconcileStoredResource(*model.Resource, int64) error
+}
+
+// DurableDeletion 先持久化删除意图，现有 outbox 清理完成后才移除记录。
+type DurableDeletion interface {
+	PrepareAssetDeletion(userID, assetID string, resourceIDs []string, expectedStatus ...string) error
+	AssetDeletionState(userID, assetID string) (exists, complete bool, err error)
+}
+
 // Lifecycle is the typed application seam for activity, playback, appearance
 // references, recycle-bin policy, and background work. Methods are the port;
 // the application adapter is a concrete type, not a bag of callbacks.
@@ -92,4 +104,6 @@ type Dependencies struct {
 	Lifecycle    Lifecycle
 	LocalStorage bool
 	DataDir      string
+	// ResumeChunkedUploads 允许平台重启后继续已持久预留的分片会话。
+	ResumeChunkedUploads bool
 }

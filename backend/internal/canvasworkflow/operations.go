@@ -184,7 +184,7 @@ func Normalize(d Definition) Definition {
 			} else if nodes[e.From].MediaType == "text" {
 				e.ToPort = "prompt"
 			} else {
-				e.ToPort = "reference" + strings.ToUpper(nodes[e.From].MediaType[:1]) + nodes[e.From].MediaType[1:] + "s"
+				e.ToPort = MediaField(nodes[e.From].MediaType)
 			}
 			key := e.To + ":" + e.ToPort
 			e.Order = counters[key]

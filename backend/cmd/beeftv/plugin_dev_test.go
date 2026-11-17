@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
 	"io"
@@ -17,6 +18,7 @@ func capturePluginCommand(t *testing.T, args ...string) (map[string]any, error) 
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer reader.Close()
 	os.Stdout = writer
 	runErr := runPlugin(args)
 	writer.Close()
@@ -64,13 +66,36 @@ func TestPluginValidateReportsTheBrokenField(t *testing.T) {
 }
 
 func TestPluginValidateAcceptsEveryShippedInterface(t *testing.T) {
-	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*.beeftv-plugin"))
+	paths, err := filepath.Glob(filepath.Join("..", "..", "..", "plugin-packages", "*", "manifest.json"))
 	if err != nil || len(paths) == 0 {
-		t.Fatalf("no packaged interfaces: %v", err)
+		t.Fatalf("未找到接口插件清单：%v", err)
 	}
 	for _, path := range paths {
-		if _, err := capturePluginCommand(t, "validate", path); err != nil {
-			t.Fatalf("%s: %v", filepath.Base(path), err)
-		}
+		t.Run(filepath.Base(filepath.Dir(path)), func(t *testing.T) {
+			manifest, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// 从源码清单生成真实 ZIP，保留打包入口校验且不依赖发布产物。
+			var archive bytes.Buffer
+			writer := zip.NewWriter(&archive)
+			entry, err := writer.Create("manifest.json")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := entry.Write(manifest); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+			packagePath := filepath.Join(t.TempDir(), "interface.beeftv-plugin")
+			if err := os.WriteFile(packagePath, archive.Bytes(), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := capturePluginCommand(t, "validate", packagePath); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

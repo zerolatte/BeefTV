@@ -1,4 +1,5 @@
 import { http, type HttpRequestConfig } from "./request";
+import { assertGenerationAvailable } from "@/services/generation-availability";
 
 export type WorkflowMediaType = "image" | "video" | "audio" | "text";
 export type WorkflowNodeRole = "input" | "constant" | "operation" | "generation" | "depth";
@@ -45,8 +46,9 @@ export type WorkflowRun = {
     templateId: string;
     templateName: string;
     templateRevision?: number;
-    status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+    status: "queued" | "running" | "paused" | "succeeded" | "failed" | "cancelled";
     error?: string;
+    reason?: string;
     steps: Array<WorkflowValue & { nodeId: string; title: string; status: "pending" | "running" | "waiting_selection" | "succeeded" | "failed" | "cancelled"; taskId?: string; error?: string; candidates?: WorkflowValue[] }>;
     outputs: WorkflowOutput[];
     createdAt: string;
@@ -60,10 +62,16 @@ export const listCanvasWorkflows = (config?: HttpRequestConfig) => http.get<{ wo
 export const saveCanvasWorkflow = (input: { name: string; description: string; definition: WorkflowDefinition }, config?: HttpRequestConfig) => http.post<CanvasWorkflow>("/canvas-workflows", input, config);
 export const deleteCanvasWorkflow = (id: string, config?: HttpRequestConfig) => http.delete(workflowPath(id), config);
 export const listWorkflowRuns = (id: string, config?: HttpRequestConfig) => http.get<{ runs: WorkflowRun[] }>(`${workflowPath(id)}/runs`, config);
-export const startWorkflowRun = (id: string, input: { clientOperationId: string; templateRevision?: number; inputs: Record<string, WorkflowValue> }, config?: HttpRequestConfig) => http.post<WorkflowRun>(`${workflowPath(id)}/runs`, input, config);
+export function startWorkflowRun(id: string, input: { clientOperationId: string; templateRevision?: number; inputs: Record<string, WorkflowValue> }, config?: HttpRequestConfig) {
+    assertGenerationAvailable();
+    return http.post<WorkflowRun>(`${workflowPath(id)}/runs`, input, config);
+}
 export const getWorkflowRun = (id: string, config?: HttpRequestConfig) => http.get<WorkflowRun>(runPath(id), config);
 export const selectWorkflowImage = (id: string, input: { nodeId: string; resourceId: string }, config?: HttpRequestConfig) => http.post<WorkflowRun>(`${runPath(id)}/select-image`, input, config);
-export const retryWorkflowRun = (id: string, config?: HttpRequestConfig) => http.post<WorkflowRun>(`${runPath(id)}/retry`, {}, config);
+export function retryWorkflowRun(id: string, input: { clientOperationId: string }, config?: HttpRequestConfig) {
+    assertGenerationAvailable();
+    return http.post<WorkflowRun>(`${runPath(id)}/retry`, input, config);
+}
 export const cancelWorkflowRun = (id: string, config?: HttpRequestConfig) => http.post<WorkflowRun>(`${runPath(id)}/cancel`, {}, config);
 export const getWorkflowEditor = (id: string, revision?: number, config?: HttpRequestConfig) => http.get<{ workflow: CanvasWorkflow; operations: WorkflowOperation[] }>(`${workflowPath(id)}/editor`, { ...config, params: revision ? { revision } : undefined });
 export const updateCanvasWorkflow = (id: string, input: { name: string; description: string; definition: WorkflowDefinition; expectedRevision: number }, config?: HttpRequestConfig) => http.put<CanvasWorkflow>(workflowPath(id), input, config);

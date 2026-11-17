@@ -19,6 +19,10 @@ import { PromptTemplateOperation, parseGeneratedStory, promptTemplateTaskPlaceho
 import { runBackendGenerationTask } from "@/services/api/generation-task";
 import { createProject, deleteProject, duplicateProject, importProjectUnits, listProjectFolders, listProjects, moveProjectToFolder, updateProject, type ProjectSummary } from "@/services/api/projects";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
+import { useUserStore } from "@/stores/use-user-store";
+import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isWorkspaceFeatureEnabled } from "@/lib/workspace-features";
+import { PLATFORM_GENERATION_DISABLED_MESSAGE } from "@/services/generation-availability";
 
 import { sourceTypeLabel } from "./detail/shared";
 
@@ -29,6 +33,8 @@ export default function ProjectsPage() {
     const queryClient = useQueryClient();
     const { message, modal } = App.useApp();
     const effectiveConfig = useEffectiveConfig();
+    const features = useUserStore((state) => state.features);
+    const generationEnabled = isWorkspaceFeatureEnabled("generationEnabled", features, isLocalWorkspaceMode());
     const [createForm] = Form.useForm<ProjectForm>();
     const [searchParams, setSearchParams] = useSearchParams();
     const [keyword, setKeyword] = useState("");
@@ -73,6 +79,7 @@ export default function ProjectsPage() {
     }, [createForm, createOpen, createSource, storyDraft]);
 
     const generateStory = async () => {
+        if (!generationEnabled) { message.info(PLATFORM_GENERATION_DISABLED_MESSAGE); return; }
         const story = storyDraft.trim();
         if (!story || generating) return;
         const textModel = generateModel || effectiveConfig.textModel;
@@ -159,7 +166,7 @@ export default function ProjectsPage() {
         onError: (error) => message.error(error instanceof Error ? error.message : "项目删除失败"),
     });
     const archiveMutation = useMutation({
-        mutationFn: ({ id, status }: { id: string; status: string }) => updateProject(id, { status }),
+        mutationFn: ({ id, status, expectedRevision }: { id: string; status: string; expectedRevision: number }) => updateProject(id, { status, expectedRevision }),
         onSuccess: (_, variables) => {
             void queryClient.invalidateQueries({ queryKey: ["projects"] });
             message.success(variables.status === "archived" ? "项目已归档" : "项目已恢复");
@@ -167,7 +174,7 @@ export default function ProjectsPage() {
         onError: (error) => message.error(error instanceof Error ? error.message : "项目状态更新失败"),
     });
     const renameMutation = useMutation({
-        mutationFn: ({ id, name }: { id: string; name: string }) => updateProject(id, { name }),
+        mutationFn: ({ id, name, expectedRevision }: { id: string; name: string; expectedRevision: number }) => updateProject(id, { name, expectedRevision }),
         onSuccess: () => {
             setRenamingProject(null);
             void queryClient.invalidateQueries({ queryKey: ["projects"] });
@@ -203,8 +210,8 @@ export default function ProjectsPage() {
     const hasInitialError = query.isError && !query.data;
     return (
         <WorkspacePage className="library-page project-library-page" grid>
-            <PageHeader title="短剧工作台" description="你的故事、章节与镜头，都在这里。" meta={<span className="app-projects-header-meta">{totalProjectCount} 个项目</span>} />
-            <details className="story-launcher-panel" aria-label="开始一部新短剧">
+            <PageHeader title="短剧工作台" description="你的故事、章节与镜头，都在这里。" meta={<span className="app-projects-header-meta">{totalProjectCount} 个项目</span>} actions={!generationEnabled ? <Button type="primary" icon={<Plus className="size-3.5" />} onClick={() => openCreate("blank")}>新建项目</Button> : undefined} />
+            {generationEnabled ? <details className="story-launcher-panel" aria-label="开始一部新短剧">
                 <summary className="story-launcher-head">
                     <div className="story-launcher-title">
                         <span className="story-launcher-mark"><Sparkles className="size-4" /></span>
@@ -259,7 +266,7 @@ export default function ProjectsPage() {
                     <label><span>角色规模</span><Select size="small" className="min-w-28" value={generateCharacterScale} onChange={setGenerateCharacterScale} options={[{ label: "2 个", value: "2 个" }, { label: "3-4 个", value: "3-4 个" }, { label: "5-6 个", value: "5-6 个" }]} /></label>
                 </div>
                 </details>
-            </details>
+            </details> : null}
             <CollectionToolbar active={Boolean(keyword || status !== "all" || sort !== "updated")} onReset={() => { setKeyword(""); setStatus("all"); setSort("updated"); }}>
                 <Input allowClear className="app-list-search" prefix={<Search className="size-4 text-foreground/40" />} value={keyword} placeholder="搜索项目、简介或画风" onChange={(event) => setKeyword(event.target.value)} />
                 <Select className="w-32" value={status} onChange={setStatus} options={[{ label: "全部状态", value: "all" }, { label: "进行中", value: "active" }, { label: "已归档", value: "archived" }]} />
@@ -270,7 +277,7 @@ export default function ProjectsPage() {
             {query.isLoading ? <WorkspaceLoadingState label="正在整理项目" detail="读取章节、画布与资产进度" /> : null}
             {!query.isLoading && !hasInitialError && rows.length ? (
                 <CollectionGrid className="library-grid project-library-grid">
-                    {rows.map((row) => <ProjectRow key={row.project.id} row={row} folders={foldersQuery.data?.folders || []} onDelete={() => modal.confirm({ title: "删除项目？", content: `项目章节、画布关联和素材归属将一并移除「${row.project.name}」，独立画布与素材库原始素材会保留。此操作不可撤销。`, okText: "删除项目", cancelText: "取消", okButtonProps: { danger: true }, onOk: () => deleteMutation.mutateAsync(row.project.id) })} onRename={() => { setRenameValue(row.project.name); setRenamingProject(row.project); }} onArchive={() => archiveMutation.mutate({ id: row.project.id, status: row.project.status === "archived" ? "active" : "archived" })} onDuplicate={async () => { await duplicateProject(row.project.id); await queryClient.invalidateQueries({ queryKey: ["projects"] }); message.success("项目副本已创建"); }} onMove={async (folderId) => { await moveProjectToFolder(row.project.id, folderId); await queryClient.invalidateQueries({ queryKey: ["projects"] }); message.success(folderId ? "项目已移动" : "项目已移出文件夹"); }} />)}
+                    {rows.map((row) => <ProjectRow key={row.project.id} row={row} folders={foldersQuery.data?.folders || []} onDelete={() => modal.confirm({ title: "删除项目？", content: `项目章节、画布关联和素材归属将一并移除「${row.project.name}」，独立画布与素材库原始素材会保留。此操作不可撤销。`, okText: "删除项目", cancelText: "取消", okButtonProps: { danger: true }, onOk: () => deleteMutation.mutateAsync(row.project.id) })} onRename={() => { setRenameValue(row.project.name); setRenamingProject(row.project); }} onArchive={() => archiveMutation.mutate({ id: row.project.id, status: row.project.status === "archived" ? "active" : "archived", expectedRevision: row.project.revision })} onDuplicate={async () => { await duplicateProject(row.project.id); await queryClient.invalidateQueries({ queryKey: ["projects"] }); message.success("项目副本已创建"); }} onMove={async (folderId) => { await moveProjectToFolder(row.project.id, folderId, row.project.revision); await queryClient.invalidateQueries({ queryKey: ["projects"] }); message.success(folderId ? "项目已移动" : "项目已移出文件夹"); }} />)}
                 </CollectionGrid>
             ) : null}
             {!query.isLoading && !hasInitialError ? <div ref={loadMoreRef} className="library-load-more" aria-live="polite">
@@ -302,8 +309,8 @@ export default function ProjectsPage() {
                     <div className="flex justify-end gap-2"><Button onClick={() => setCreateOpen(false)}>取消</Button><Button type="primary" htmlType="submit" loading={mutation.isPending}>创建项目</Button></div>
                 </Form>
             </Modal>
-            <Modal className="library-modal" title="重命名项目" open={Boolean(renamingProject)} okText="保存" cancelText="取消" confirmLoading={renameMutation.isPending} onCancel={() => setRenamingProject(null)} onOk={() => { const name = renameValue.trim(); if (!renamingProject || !name) return; renameMutation.mutate({ id: renamingProject.id, name }); }}>
-                <Input autoFocus value={renameValue} maxLength={80} placeholder="请输入项目名称" onChange={(event) => setRenameValue(event.target.value)} onPressEnter={() => { const name = renameValue.trim(); if (renamingProject && name) renameMutation.mutate({ id: renamingProject.id, name }); }} />
+            <Modal className="library-modal" title="重命名项目" open={Boolean(renamingProject)} okText="保存" cancelText="取消" confirmLoading={renameMutation.isPending} onCancel={() => setRenamingProject(null)} onOk={() => { const name = renameValue.trim(); if (!renamingProject || !name) return; renameMutation.mutate({ id: renamingProject.id, name, expectedRevision: renamingProject.revision }); }}>
+                <Input autoFocus value={renameValue} maxLength={80} placeholder="请输入项目名称" onChange={(event) => setRenameValue(event.target.value)} onPressEnter={() => { const name = renameValue.trim(); if (renamingProject && name) renameMutation.mutate({ id: renamingProject.id, name, expectedRevision: renamingProject.revision }); }} />
             </Modal>
             <CanvasStylePickerModal
                 open={stylePickerOpen}

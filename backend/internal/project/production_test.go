@@ -83,7 +83,7 @@ func TestArchivedAndForeignOwnerRejectProductionWrites(t *testing.T) {
 	if _, err := svc.CreateProjectShot("user-2", project.ID, CreateProjectShotRequest{UnitID: unit.ID, Title: "SC.01", Description: "画面", DurationMs: 1000}); !IsNotFound(err) {
 		t.Fatalf("foreign shot create = %v, want not found", err)
 	}
-	archived, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{Status: string(model.ProjectStatusArchived)})
+	archived, err := svc.UpdateProject("user-1", project.ID, UpdateProjectRequest{ExpectedRevision: ownedRevision(t, svc, project.ID), Status: string(model.ProjectStatusArchived)})
 	if err != nil {
 		t.Fatal(err)
 	}

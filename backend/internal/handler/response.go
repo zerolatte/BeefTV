@@ -9,6 +9,7 @@ import (
 	"infinite-canvas/backend/internal/app"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 const internalErrorMessage = "系统处理失败，请稍后重试"
@@ -27,6 +28,10 @@ func fail(c *gin.Context, status int, err error) {
 }
 
 func failService(c *gin.Context, err error) {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		writeFailure(c, http.StatusNotFound, http.StatusNotFound, app.ReasonForStatus(http.StatusNotFound), "对象不存在")
+		return
+	}
 	var modelErr *app.ModelError
 	if errors.As(err, &modelErr) && modelErr.AppError != nil && validErrorStatus(modelErr.Status) {
 		writeAppError(c, modelErr.AppError)
