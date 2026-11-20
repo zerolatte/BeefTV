@@ -11,6 +11,7 @@ import (
 // application boundary. Provider-specific input remains opaque so protocol
 // adapters can evolve without coupling HTTP or desktop composition to them.
 type CreateRequest struct {
+	QuoteID        string         `json:"quoteId,omitempty"`
 	ProjectID      string         `json:"projectId"`
 	Type           string         `json:"type"`
 	Operation      string         `json:"operation"`

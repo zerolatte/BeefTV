@@ -21,6 +21,7 @@ import { useThemeStore } from "@/stores/use-theme-store";
 import { getDesktopAppBinding } from "@/services/desktop-runtime";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { OnboardingEntry } from "@/components/onboarding/first-creation-guide";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 
 export type WorkspaceNavItem = {
     id: string;
@@ -45,6 +46,14 @@ function toolItem(slug: NavigationToolSlug, to: string): WorkspaceNavItem {
 }
 
 function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[]; footer: WorkspaceNavItem[] } {
+    if (isPlatformWorkspaceMode()) return { groups: [{ items: [
+        { id: "new", title: "新建项目", icon: Plus, to: "/canvas?mode=new" },
+        { id: "home", title: "首页", icon: Home, to: "/" },
+        { ...toolItem("canvas", "/project"), title: "项目" },
+        { ...toolItem("assets", "/assets"), title: "资产" },
+        { id: "credits", title: "我的积分", icon: Settings2, to: "/credits" },
+        ...(useUserStore.getState().user?.role === "admin" ? [{ id: "admin", title: "平台管理", icon: Settings2, to: "/admin" }] : []),
+    ] }], footer: [] };
     const groups: WorkspaceNavGroup[] = [
         {
             items: [
@@ -325,7 +334,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                <OnboardingEntry compact={collapsed} />
+                {!isPlatformWorkspaceMode() && <OnboardingEntry compact={collapsed} />}
                 {footer.length ? (
                     <div className="flex flex-col gap-0.5">
                         {footer.map((item) => (

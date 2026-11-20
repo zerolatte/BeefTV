@@ -385,9 +385,18 @@ func OutcomeFactsForTasks(repo *repository.Repository, tasks []model.Task, stage
 		}
 	}
 	evidence, err := repo.ImageRecoveryEvidence(ids)
+	var settlements map[string]model.CreditReservation
+	var creditErr error
+	if repo.PlatformMode() {
+		settlements, creditErr = repo.CreditReservationsForTasks(ids)
+	}
 	facts := make(map[string]OutcomeFacts, len(tasks))
 	for _, task := range tasks {
-		f := OutcomeFacts{Unreadable: err != nil, RequestNotSent: task.Stage == stageRequestNotSent}
+		f := OutcomeFacts{Unreadable: err != nil || creditErr != nil, RequestNotSent: task.Stage == stageRequestNotSent}
+		if reservation, ok := settlements[task.ID]; ok {
+			f.CreditFinalized = reservation.State == "settled"
+			f.CreditCharged = reservation.Charged > 0
+		}
 		if e, ok := evidence[task.ID]; ok {
 			f.HasImageReceipt = e.HasReceipt
 			if e.Attempt != nil && e.Attempt.RouteRun == task.RouteRun {

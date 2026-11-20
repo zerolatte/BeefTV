@@ -15,6 +15,9 @@ type workspaceOwners interface {
 // currentUser resolves the stable workspace owner. Local routes never inspect
 // cookies and never create a session record.
 func currentUser(c *gin.Context, svc workspaceOwners) (*model.User, error) {
+	if account, ok := c.Get("platform.account"); ok {
+		return &account.(*model.PlatformAccount).User, nil
+	}
 	if _, exists := c.Get(workspaceContextKey); exists {
 		scope, err := CurrentWorkspace(c)
 		if err != nil {

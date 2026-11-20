@@ -69,6 +69,8 @@ func ClientOperationID(input map[string]any) (string, error) {
 }
 
 func ClientOperationHash(req CreateRequest) (string, error) {
+	// 报价属于授权凭证；刷新报价不能改变同一业务提交的幂等身份。
+	req.QuoteID = ""
 	req.Prompt = strings.TrimSpace(req.Prompt)
 	req.Type = strings.TrimSpace(req.Type)
 	req.ProjectID = strings.TrimSpace(req.ProjectID)

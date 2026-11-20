@@ -22,6 +22,7 @@ import {
 } from "@/services/workspace-startup-state";
 import { normalizeConfigSnapshot, useConfigStore } from "@/stores/use-config-store";
 import { useUserStore } from "@/stores/use-user-store";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 
 export function WorkspaceBootstrapHydrator({ children }: { children: ReactNode }) {
     const hydrated = useUserStore((state) => state.hydrated);
@@ -91,6 +92,7 @@ export function WorkspaceBootstrapHydrator({ children }: { children: ReactNode }
     useEffect(() => {
         let ready = false;
         const unsubscribe = useConfigStore.subscribe((state) => {
+            if (isPlatformWorkspaceMode()) return;
             if (applyingHydratedModelConfig || !shouldSaveLocalModelConfig({ subscriptionReady: ready, modelConfigReady: modelConfigReady.current, channelCount: state.config.channels.length })) return;
             void commitModelConfig(state.config);
         });
@@ -174,7 +176,7 @@ export async function hydrateLocalModelConfig() {
     } finally {
         applyingHydratedModelConfig = false;
     }
-    if (shouldPersistHydratedModelConfig(result.health) || profilesMigrated) await commitModelConfig(normalizedConfig);
+    if (!isPlatformWorkspaceMode() && (shouldPersistHydratedModelConfig(result.health) || profilesMigrated)) await commitModelConfig(normalizedConfig);
 }
 
 export function shouldPersistHydratedModelConfig(health: string) {

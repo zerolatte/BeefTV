@@ -6,7 +6,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $backendDir = Join-Path $repoRoot "backend"
 $webDir = Join-Path $repoRoot "web"
-$dataDir = Join-Path $repoRoot ".local\project-workbench-debug"
+$dataDir = Join-Path $repoRoot ".local\platform-debug"
 $goBuildCache = Join-Path $repoRoot ".local\cache\go-build"
 $goModuleCache = Join-Path $repoRoot ".local\cache\go-mod"
 
@@ -19,6 +19,8 @@ foreach ($commandName in @("go", "bun")) {
 foreach ($directory in @($dataDir, $goBuildCache, $goModuleCache)) {
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
 }
+
+& (Join-Path $PSScriptRoot 'build-protocol-packages.ps1')
 
 $viteBinary = Join-Path $webDir "node_modules\.bin\vite"
 if (-not (Test-Path -LiteralPath $viteBinary)) {
@@ -68,6 +70,7 @@ $backendCommand = @"
 `$ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $backendDirLiteral
 `$env:CANVAS_BACKEND_ADDR = '127.0.0.1:8080'
+`$env:CANVAS_PUBLIC_ORIGIN = 'http://localhost:3000'
 `$env:CANVAS_BACKEND_DATA_DIR = $dataDirLiteral
 `$env:GOCACHE = $(ConvertTo-PowerShellLiteral $goBuildCache)
 `$env:GOMODCACHE = $(ConvertTo-PowerShellLiteral $goModuleCache)

@@ -26,35 +26,25 @@ ARG BUILD_TIME=unknown
 RUN --mount=type=cache,target=/root/.cache/go-build set -eu; \
     version="${BUILD_VERSION:-$(tr -d '\r\n' </src/VERSION)}"; \
     ldflags="-s -w -X infinite-canvas/backend/internal/buildinfo.Version=${version} -X infinite-canvas/backend/internal/buildinfo.Commit=${BUILD_COMMIT} -X infinite-canvas/backend/internal/buildinfo.BuildTime=${BUILD_TIME}"; \
-    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/infinite-canvas-backend ./cmd/server
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/infinite-canvas-backend ./cmd/server; \
+    CGO_ENABLED=1 GOOS=linux go build -trimpath -ldflags="$ldflags" -o /out/platform-admin ./cmd/platform-admin
 
-FROM oven/bun:1.4.2-alpine AS assistant-build
+FROM alpine:3.22
 
-WORKDIR /src/agent-host
-COPY agent-host/package.json agent-host/bun.lock ./
-RUN --mount=type=cache,target=/root/.bun/install/cache bun install --frozen-lockfile
-COPY agent-host ./
-
-FROM node:24.22.1-alpine
-
-RUN apk add --no-cache ca-certificates tzdata wget ffmpeg fontconfig font-noto-cjk \
+RUN apk add --no-cache ca-certificates tzdata wget nodejs ffmpeg fontconfig font-noto-cjk \
     && addgroup -S app \
     && adduser -S app -G app
 
 WORKDIR /app
 ENV GIN_MODE=release
-# Loopback inside the container. Compose sets CANVAS_BACKEND_ADDR=:8080 so other
-# containers can reach the API. Do not publish 8080 on all host interfaces:
-# the server profile has no launch token.
+# Compose 通过内网访问平台 API，公网仅暴露前端反向代理。
 ENV CANVAS_BACKEND_ADDR=127.0.0.1:8080
-ENV CANVAS_BACKEND_DATA_DIR=/data
+ENV CANVAS_BACKEND_DATA_DIR=/data/platform
 
 RUN mkdir -p /data && chown -R app:app /data
 COPY --from=backend-build /out/infinite-canvas-backend /usr/local/bin/infinite-canvas-backend
+COPY --from=backend-build /out/platform-admin /usr/local/bin/platform-admin
 COPY --from=protocol-package-build /src/plugin-packages /app/plugin-packages
-COPY --from=assistant-build /src/agent-host /usr/local/bin/agent-host
-RUN mkdir -p /usr/local/bin/agent-host/runtime/bin \
-    && ln -s /usr/local/bin/node /usr/local/bin/agent-host/runtime/bin/node
 
 USER app
 EXPOSE 8080

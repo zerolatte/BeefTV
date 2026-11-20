@@ -40,7 +40,8 @@ var ErrCanvasRevisionConflict = errors.New("canvas revision changed")
 var ErrAssetExpectedStatusMismatch = errors.New("asset expected status mismatch")
 
 type Repository struct {
-	db *gorm.DB
+	db       *gorm.DB
+	platform bool
 }
 
 // DB 暴露底层连接，供同一进程内的操作层复用同一个数据库（不新建第二个库）。
@@ -57,7 +58,7 @@ func (r *Repository) WithTx(tx *gorm.DB) *Repository {
 	if r == nil {
 		return &Repository{db: tx}
 	}
-	return &Repository{db: tx}
+	return &Repository{db: tx, platform: r.platform}
 }
 
 // HoldsTransaction reports that this repository is already bound to a GORM
@@ -85,8 +86,13 @@ func New(db *gorm.DB) *Repository {
 	return &Repository{db: db}
 }
 
+// NewPlatform 为账号平台启用任务领取和结果取回的账本约束。
+func NewPlatform(db *gorm.DB) *Repository { return &Repository{db: db, platform: true} }
+
+func (r *Repository) PlatformMode() bool { return r != nil && r.platform }
+
 func (r *Repository) WithContext(ctx context.Context) *Repository {
-	return &Repository{db: r.db.WithContext(ctx)}
+	return &Repository{db: r.db.WithContext(ctx), platform: r.platform}
 }
 
 func (r *Repository) Transaction(fn func(*Repository) error) error {

@@ -26,6 +26,9 @@ func (s *Service) RetryWithCredentialRefresh(userID, id, expectedInputJSON, inpu
 }
 
 func (s *Service) retry(userID, id string, refresh *retryCredentialRefresh) (*model.Task, error) {
+	if s.admission != nil {
+		return nil, kernel.Forbidden("平台重新生成需要新报价和新任务")
+	}
 	if s.deps.Runtime == nil || s.deps.Images == nil || s.deps.Failures == nil || s.deps.Secrets == nil || s.deps.Catalog == nil || s.deps.Media == nil || s.deps.Policy == nil || s.deps.Projects == nil || s.deps.Present == nil {
 		return nil, unavailable()
 	}

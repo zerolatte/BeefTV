@@ -7,6 +7,7 @@ import { Kbd } from "@/components/ui/base/kbd";
 import { usePluginSlot } from "@/lib/plugins/slot-registry";
 import { cn } from "@/lib/utils";
 import { useUserStore } from "@/stores/use-user-store";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 
 type PaletteEntry = {
     id: string;
@@ -42,6 +43,11 @@ export function WorkspaceCommandPalette({ open, onClose }: { open: boolean; onCl
                 void entry.payload.handler();
             },
         }));
+        if (isPlatformWorkspaceMode()) return [
+            { id: "home", title: "首页", icon: Home, to: "/" },
+            toolEntry("projects", "/project"), toolEntry("canvas", "/canvas"), toolEntry("assets", "/assets"),
+            { id: "credits", title: "我的积分", icon: Activity, to: "/credits" },
+        ];
         return [
             { id: "home", title: "首页", icon: Home, to: "/" },
             toolEntry("projects", "/project"),

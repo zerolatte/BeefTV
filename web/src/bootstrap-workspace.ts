@@ -1,6 +1,9 @@
 import { bootstrapDesktopRuntime } from "@/services/desktop-runtime";
 import { appPathname } from "@/lib/app-routing";
 import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
+import { ApiError, enablePlatformRequests, bindPlatformUser, abortPlatformRequests } from "@/services/api/request";
+import { getPlatformSession } from "@/services/api/platform";
+import { setWorkspaceCapabilitySnapshot } from "@/services/workspace-mode";
 import { setWorkspaceStorageScope } from "@/lib/user-scope";
 import { getWorkspaceBootstrap, type WorkspaceBootstrapPayload } from "@/services/api/workspace";
 import {
@@ -36,12 +39,30 @@ export async function ensureWorkspaceStorageHydrated(options?: { retry?: boolean
 }
 
 async function mountWorkspaceApplication() {
-    const { bootstrapAppearance } = await import("@/services/appearance-bootstrap");
-    await bootstrapAppearance().catch(() => console.warn("外观初始化未完成，继续打开工作区"));
+    if (isEmbeddedRuntime()) {
+        const { bootstrapAppearance } = await import("@/services/appearance-bootstrap");
+        await bootstrapAppearance().catch(() => console.warn("外观初始化未完成，继续打开工作区"));
+    }
     await import("./application");
 }
 
 export async function startApplication() {
+    if (!isEmbeddedRuntime()) {
+        enablePlatformRequests();
+        const sessionChannel = new BroadcastChannel("beeftv-platform-session");
+        sessionChannel.onmessage = () => { abortPlatformRequests(); window.location.reload(); };
+        try {
+            const session = await getPlatformSession();
+            bindPlatformUser(session.user.id);
+            if (session.user.mustChangePassword) { const { mountPlatformLogin } = await import("@/pages/platform/login"); mountPlatformLogin(true); return; }
+            setWorkspaceCapabilitySnapshot({ contractVersion: 1, profile: "platform", capabilities: { localAssets: true, providerCalls: true } });
+        } catch (error) {
+            if (error instanceof ApiError && error.status === 401) { const { mountPlatformLogin } = await import("@/pages/platform/login"); mountPlatformLogin(); return; }
+            const { mountStandaloneStartupError } = await import("./mount-startup-error");
+            mountStandaloneStartupError({ initialFailure: recordWorkspaceStartupFailure(error), onRetryBootstrap: async () => { window.location.reload(); } });
+            return;
+        }
+    }
     setPrimedWorkspaceBootstrap(null);
     beginStartupDiagnosticsScope();
     initializeClientDiagnostics();

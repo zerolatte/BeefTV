@@ -31,6 +31,8 @@ concurrency:
 
 jobs:
   native:
+    # 平台版本停止桌面构建与生产发布，历史安装包保持不变。
+    if: ${{ false }}
     name: Installer (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90

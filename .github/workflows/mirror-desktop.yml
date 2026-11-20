@@ -39,7 +39,8 @@ env:
 
 jobs:
   mirror:
-    if: github.repository == 'glanderness/BeefTV' && github.ref == 'refs/heads/main'
+    # 平台版本停止桌面构建与生产发布，历史安装包保持不变。
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

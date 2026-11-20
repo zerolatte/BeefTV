@@ -52,6 +52,30 @@ export let apiBaseURL = import.meta.env.VITE_CANVAS_BACKEND_URL || "/api";
 // 没有超时会让启动水合一直停留在 loading，Playwright 和用户都看不到页面。
 export const apiClient = axios.create({ baseURL: apiBaseURL, withCredentials: true, timeout: 4_000 });
 
+let platformRequests = false;
+let sessionRequests = new AbortController();
+let platformUser = "";
+export function bindPlatformUser(id: string) { platformUser = id; }
+export function platformRequestHeaders(): Record<string, string> { return platformUser ? { "X-Platform-User": platformUser } : {}; }
+export function enablePlatformRequests() { platformRequests = true; }
+export function abortPlatformRequests() { sessionRequests.abort(); sessionRequests = new AbortController(); }
+
+apiClient.interceptors.request.use((config) => {
+    if (!platformRequests) return config;
+    if (platformUser) config.headers.set("X-Platform-User", platformUser);
+    const csrf = typeof document === "undefined" ? "" : document.cookie.split("; ").find((item) => item.startsWith("beeftv_csrf="))?.split("=").slice(1).join("=");
+    if (csrf) config.headers.set("X-CSRF-Token", decodeURIComponent(csrf));
+    config.signal = config.signal ? AbortSignal.any([config.signal as AbortSignal, sessionRequests.signal]) : sessionRequests.signal;
+    return config;
+});
+apiClient.interceptors.response.use((response) => response, (error) => {
+    if (platformRequests && error.response?.status === 401 && !String(error.config?.url).startsWith("/auth/")) {
+        abortPlatformRequests();
+        window.location.reload();
+    }
+    return Promise.reject(error);
+});
+
 export function configureApiRuntime(baseURL: string, launchToken?: string, uiBootstrapToken?: string) {
     apiBaseURL = baseURL;
     apiClient.defaults.baseURL = baseURL;

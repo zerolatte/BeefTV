@@ -26,7 +26,7 @@ import {
     subscribeBuiltinPresets,
 } from "@/lib/builtin-service-presets";
 import { syncPartnerCatalogFromBackend, syncPluginsFromBackend } from "@/services/plugin-sync";
-import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isLocalWorkspaceMode, isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import "@/styles/workspace-product.css";
 
 const workspaceTheme = getWorkspaceAntThemeConfig();
@@ -58,6 +58,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         let lastSyncedAt = Date.now();
+        if (isPlatformWorkspaceMode()) return;
         const runFullSync = () => {
             lastSyncedAt = Date.now();
             // A failed read keeps the plugins remembered in this browser.
@@ -89,6 +90,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
 
     useEffect(() => {
         const boundaryDelay = nextActivePartnerWindowDelayMs();
+        if (isPlatformWorkspaceMode()) return;
         if (boundaryDelay === null) return;
         const timer = window.setTimeout(() => {
             notifyPartnerWindowBoundaryCrossed();
@@ -157,7 +159,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
         <ConfigProvider theme={productWorkspace ? workspaceTheme : undefined}>
             <div className={cn("app-user-workspace h-dvh overflow-hidden text-foreground", spatialWorkbench && "app-spatial-workspace", productWorkspace && "app-product-workspace", pathname === "/" && "app-home-route")}>
                 <AppWorkspaceShell>{children}</AppWorkspaceShell>
-                <FirstCreationGuide />
+                {!isPlatformWorkspaceMode() && <FirstCreationGuide />}
                 <WorkspaceOperationProgress />
                 <WorkspaceNoticeStack notices={workspaceNotices} />
             </div>

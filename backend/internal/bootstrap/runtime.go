@@ -22,6 +22,7 @@ import (
 	"infinite-canvas/backend/internal/beeftv"
 	"infinite-canvas/backend/internal/buildinfo"
 	"infinite-canvas/backend/internal/conversation"
+	"infinite-canvas/backend/internal/credits"
 	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/depthcapture"
 	"infinite-canvas/backend/internal/eagle"
@@ -43,6 +44,8 @@ import (
 )
 
 type Runtime struct {
+	platformCredits  *credits.Service
+	creditDone       chan struct{}
 	workspaceLock    *os.File
 	cfg              Config
 	db               *gorm.DB
@@ -69,6 +72,9 @@ type Runtime struct {
 
 func Open(_ context.Context, raw Config) (result *Runtime, openErr error) {
 	cfg := raw.withDefaults()
+	if cfg.Profile == ProfileServer {
+		return openPlatform(cfg)
+	}
 	if cfg.Profile != ProfileServer && cfg.Profile != ProfileDesktop {
 		return nil, fmt.Errorf("不支持的运行模式：%s", cfg.Profile)
 	}
@@ -426,7 +432,12 @@ func (r *Runtime) Start() error {
 		r.service.RecoverPlaybackTranscodes()
 	}()
 	// 精选插件跟着精选列表自动更新；HTTP 服务关闭时一起停下。
-	go r.service.PluginDomain().RunOfficialUpdates(httpContext)
+	if r.platformCredits != nil {
+		r.creditDone = make(chan struct{})
+		go func() { defer close(r.creditDone); r.runCreditReconciliation(httpContext) }()
+	} else {
+		go r.service.PluginDomain().RunOfficialUpdates(httpContext)
+	}
 	// The assistant loads its operation catalog from this server before becoming
 	// healthy. Accept requests before synchronously waiting for child readiness.
 	go func() {
@@ -595,6 +606,9 @@ func (r *Runtime) Close(ctx context.Context) error {
 			}
 		}
 		// 生成任务和 HTTP 请求都停了才关插件宿主：早关会杀掉还在提交的调用，后来的调用又会拉起新进程。
+		if r.creditDone != nil {
+			<-r.creditDone
+		}
 		pluginhost.Close()
 		var serviceErr error
 		if r.localApp != nil {

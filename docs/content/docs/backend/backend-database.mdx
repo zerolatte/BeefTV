@@ -3,6 +3,24 @@ title: 后端数据库
 description: BeefTV后端核心持久化表与状态边界
 ---
 
+## 平台专用库
+
+平台使用新 SQLite 数据目录，先创建共享创作表，再通过独立的 `platform_schema_migrations` 追加平台迁移。已发布本地迁移不改写。非空旧目录与已有单人数据库拒绝作为平台库。
+
+| 表 | 用途 |
+| --- | --- |
+| platform_instances | 平台实例标识，参与浏览器缓存命名空间 |
+| platform_accounts | 独立工作区、角色、状态、密码摘要、强制改密和认证版本 |
+| platform_sessions | 会话及 CSRF 摘要、有效期、认证版本 |
+| platform_audits | 开户、停用、密码、模型价格与积分操作审计 |
+| credit_accounts | 非负可用积分与冻结积分 |
+| model_credit_prices | 模型规格整数单价、发布状态及版本 |
+| credit_quotes | 请求摘要、模型与渠道更新时间、价格快照、有效期 |
+| credit_reservations | 每任务及每报价唯一的冻结记录、消费与退款结论 |
+| credit_ledgers | 唯一操作标识的冻结、消费、退款和人工调整流水 |
+
+SQLite 使用单连接和事务；任务创建与冻结原子提交，结算核对终态和有效租约。创作表沿用 `user_id` 所有权，不为管理员赋予跨用户访问。后台对账可重启恢复。迁移与运营说明见[多用户平台](platform.mdx)。
+
 # 后端数据库
 
 后端通过 GORM 管理本地 SQLite 表结构。Backend 启动时按版本顺序应用缺失迁移并写入 `local_schema_migrations`。业务写路径必须通过 service 和 repository 的状态约束，不能直接依赖前端状态。

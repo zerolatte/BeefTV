@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router";
 
 import { WorkspaceTopBarExtensionSlot } from "@/components/layout/workspace-top-bar-extension";
 import { useAppearanceStore } from "@/stores/use-appearance-store";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 
 const PAGE_TITLES: Record<string, string> = {
     home: "创作", create: "创作", projects: "项目", canvas: "自由画布",
@@ -29,7 +30,7 @@ export function WorkspaceTopBar({ sidebarOpen, onToggleSidebar }: { sidebarOpen:
             </nav> : <span className="app-workspace-topbar-spacer" />}
             <WorkspaceTopBarExtensionSlot />
             <div className="app-workspace-topbar-actions">
-                <Link to="/settings?section=channels" className="app-workspace-topbar-utility"><Settings2 /><span>模型配置</span></Link>
+                <Link to={isPlatformWorkspaceMode() ? "/credits" : "/settings?section=channels"} className="app-workspace-topbar-utility"><Settings2 /><span>{isPlatformWorkspaceMode() ? "我的积分" : "模型配置"}</span></Link>
             </div>
         </header>
     );

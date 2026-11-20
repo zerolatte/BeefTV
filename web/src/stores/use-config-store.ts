@@ -1,9 +1,10 @@
 import { useMemo } from "react";
-import { isDedicatedMediaToolCapability, type MediaCapabilities } from "@/lib/media-capabilities";
+import { isDedicatedMediaToolCapability } from "@/lib/media-capabilities";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { nanoid } from "nanoid";
 
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import { scopedLocalStorage } from "@/lib/user-scope";
 import { beefTVVideoContract, isBeefTVEndpoint } from "@/lib/beeftv-video-contracts";
 import { beefTVImageContract } from "@/lib/beeftv-image-contracts";
@@ -11,115 +12,16 @@ import { defaultProtocolForCapability, defaultProtocolForModel, inferProtocolCap
 import { normalizeVideoBoolean, normalizeVideoDuration, normalizeVideoResolution } from "@/lib/video-generation-options";
 import { defaultModelCapabilityConfig, upgradeGPTImageCapability, type ModelCapabilityConfig } from "@/lib/model-capabilities";
 import { useUserStore } from "@/stores/use-user-store";
-import type { CapabilitySpec } from "@/services/api/logical-models";
-import { seedancePortraitLabel, seedancePortraitModel, type VideoPriceQuote } from "@/lib/seedance-portrait";
+import { seedancePortraitLabel, seedancePortraitModel } from "@/lib/seedance-portrait";
 import { upgradeBuiltinModelProfile } from "@/lib/builtin-service-presets";
 export { buildApiUrl, isSystemProxyBaseUrl, resolveBackendApiUrl, systemProxyChannelId } from "@/lib/channel-url";
 
-export type ApiCallFormat = "openai" | "gemini" | "claude";
-export type ChannelInterfaceType = ModelProtocol;
-export type ChannelHeader = { name: string; value: string };
-export type ReferenceMediaTransport = Partial<Record<"image" | "video" | "audio", "auto" | "inline" | "url" | "link">>;
-
-// 兼容仍在使用旧目录标识的会话恢复和模型选择器。
+import type { ApiCallFormat, ChannelInterfaceType, ChannelHeader, ReferenceMediaTransport, ModelChannel, AiConfig, ModelCapability } from "./config-types";
+export type { ApiCallFormat, ChannelInterfaceType, ChannelHeader, ReferenceMediaTransport, ModelChannel, AiConfig, ModelCapability } from "./config-types";
 export const PUBLIC_MODEL_CATALOG_ID = "managed";
 
-export type ModelChannel = {
-    id: string;
-    name: string;
-    publicAlias?: string;
-    sortOrder?: number;
-    baseUrl: string;
-    referenceAssetOrigin?: string;
-    apiKey: string;
-    secretKey?: string;
-    headers?: ChannelHeader[];
-    apiFormat: ApiCallFormat;
-    interfaceType?: ChannelInterfaceType;
-    models: string[];
-    // 仅平台目录使用：将已保存的旧 SKU 选择重定向到当前模型家族。
-    modelAliases?: Record<string, string>;
-    scope?: "system" | "user";
-    enabled?: boolean;
-    pinned?: boolean;
-    // 这个服务以前用过的 ID，由后端给出。老画布和老设置里存的「旧ID::模型」按这个服务读。
-    legacyIds?: string[];
-    presetVersion?: number;
-    credentialRef?: string;
-    ownerPluginId?: string;
-    hasApiKey?: boolean;
-    hasSecretKey?: boolean;
-    concurrencyLimit?: number;
-    modelProfiles?: Array<{
-        model: string;
-        displayName?: string;
-        description?: string;
-        icon?: string;
-        capability: ModelCapability;
-        protocol?: ModelProtocol;
-        referenceMediaTransport?: ReferenceMediaTransport;
-        authType?: string;
-        capabilityConfig?: ModelCapabilityConfig;
-        /** "user" 表示能力参数由用户在「能力与参数」里亲手改过；未标记的配置只是界面默认值，不能拿来拦截生成。 */
-        capabilitySource?: "user";
-        imageCapabilitiesVersion?: string;
-        videoCapabilitiesVersion?: string;
-        mediaCapabilities?: MediaCapabilities;
-        mediaCapabilitiesVersion?: string;
-        videoPricing?: VideoPriceQuote | null;
-        logicalModelId?: string;
-        logicalCapabilitySpec?: CapabilitySpec;
-        logicalCapabilityProfiles?: CapabilitySpec[];
-        defaultOptions?: Record<string, unknown>;
-    }>;
-};
-
-export type AiConfig = {
-    channelMode: "remote";
-    baseUrl: string;
-    apiKey: string;
-    apiFormat: ApiCallFormat;
-    channels: ModelChannel[];
-    model: string;
-    imageModel: string;
-    videoModel: string;
-    textModel: string;
-    audioModel: string;
-    /** 画布助手模型；为空表示跟随 `textModel`。取值与其他默认模型一致，形如 `channelId::modelId`。 */
-    assistantModel: string;
-    /** 默认影音理解模型；为空表示不使用独立多模态模型。 */
-    mediaReviewModel: string;
-    audioVoice: string;
-    audioFormat: string;
-    audioSpeed: string;
-    audioPitch: string;
-    audioVolume: string;
-    audioInstructions: string;
-    videoSeconds: string;
-    vquality: string;
-    videoGenerateAudio: string;
-    videoWatermark: string;
-    videoArkPrivateAssetUpload: string; videoDraft: string; videoReturnLastFrame?: string;
-    systemPrompt: string;
-    models: string[];
-    imageModels: string[];
-    videoModels: string[];
-    textModels: string[];
-    audioModels: string[];
-    quality: string;
-    size: string;
-    transparentBackground: string;
-    seedreamMode?: string;
-    seedreamMaxImages?: string;
-    seedreamOutputFormat?: string;
-    seedreamOptimize?: string;
-    seedreamWatermark?: string;
-    count: string;
-    canvasImageCount: string;
-};
-
 export const CONFIG_STORE_KEY = "open_ai_canvas:ai_config_store";
-export type ModelCapability = "image" | "video" | "text" | "audio";
+
 const CHANNEL_MODEL_SEPARATOR = "::";
 const OPENAI_BASE_URL = "https://api.openai.com";
 const GEMINI_BASE_URL = "https://generativelanguage.googleapis.com";
@@ -341,14 +243,15 @@ export function channelHasManagedBeefTVCredential(channel: Pick<ModelChannel, "i
     return channel.credentialRef === MANAGED_BEEFTV_CREDENTIAL_REF || channel.hasApiKey === true;
 }
 
-export function channelHasGenerationCredential(channel: Pick<ModelChannel, "id" | "pinned" | "credentialRef" | "hasApiKey" | "apiKey" | "modelProfiles">, model = "") {
+export function channelHasGenerationCredential(channel: Pick<ModelChannel, "id" | "pinned" | "credentialRef" | "hasApiKey" | "apiKey" | "modelProfiles" | "scope">, model = "") {
+    if (isPlatformWorkspaceMode() && channel.scope === "system") return true;
     if (model && channel.modelProfiles?.some((item) => item.model === modelOptionName(model) && item.authType === "none")) return true;
     return channelHasManagedBeefTVCredential(channel) || Boolean(channel.apiKey?.trim());
 }
 
 function isAiConfigReady(config: AiConfig, model: string) {
     const channel = resolveModelChannel(config, model);
-    return Boolean(model.trim() && channel.baseUrl.trim() && channelHasGenerationCredential(channel, model));
+    return Boolean(model.trim() && (isPlatformWorkspaceMode() && channel.scope === "system" || channel.baseUrl.trim()) && channelHasGenerationCredential(channel, model));
 }
 
 export const useConfigStore = create<ConfigStore>()(

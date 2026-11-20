@@ -6,6 +6,7 @@ import { localWorkspaceConfig } from "@/lib/user-session";
 import { cancelBeefTVConnection, disconnectBeefTVConnection, getBeefTVConnection, getBeefTVConnectionEpoch, openBeefTVWallet, startBeefTVConnection, type BeefTVConnectionSummary } from "@/services/api/beeftv-connection";
 import { getLocalModelConfig } from "@/services/api/workspace";
 import { normalizeConfigSnapshot, useConfigStore } from "@/stores/use-config-store";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 
 const BeefTVConnectionContext = createContext<ReturnType<typeof useConnectionState> | null>(null);
 
@@ -73,6 +74,7 @@ function useConnectionState() {
     const refresh = async (options?: { allowRetry?: boolean }) => applyConnection(await getBeefTVConnection(), options);
 
     useEffect(() => {
+        if (isPlatformWorkspaceMode()) { setLoading(false); return; }
         let stopped = false;
         let timer: ReturnType<typeof setTimeout> | undefined;
         const arm = (state = currentConnection.current?.state) => {

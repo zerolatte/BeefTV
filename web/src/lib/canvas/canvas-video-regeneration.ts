@@ -1,6 +1,7 @@
 import { modelCapabilityConfigFor } from "@/lib/model-capabilities";
 import { isSeedanceVideoConfig } from "@/lib/seedance-video";
 import type { CanvasVideoEditOperation } from "@/types/canvas";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import { channelHasGenerationCredential, resolveModelChannel, selectableModelsByCapability, type AiConfig } from "@/stores/use-config-store";
 
 export function listVideoReferenceModels(config: AiConfig): string[] {
@@ -8,7 +9,7 @@ export function listVideoReferenceModels(config: AiConfig): string[] {
         const profile = modelCapabilityConfigFor(config, model).video;
         if (!profile || profile.references.maxVideos < 1 || !profile.operations.length) return false;
         const channel = resolveModelChannel(config, model);
-        return Boolean(channel.baseUrl.trim() && channelHasGenerationCredential(channel));
+        return Boolean((isPlatformWorkspaceMode() && channel.scope === "system" || channel.baseUrl.trim()) && channelHasGenerationCredential(channel));
     });
 }
 

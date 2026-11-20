@@ -2,6 +2,16 @@
 title: 本地 HTTP API
 ---
 
+## 平台账号与积分接口
+
+`cmd/server` 使用 Cookie 会话；除健康检查和 `POST /api/auth/login` 外，业务接口要求登录。写请求需要 `X-CSRF-Token` 和 `X-Platform-User`，来源必须与 `CANVAS_PUBLIC_ORIGIN` 一致。`GET /api/auth/session` 返回当前账号；`POST /api/auth/password` 修改密码并撤销会话；`POST /api/auth/logout` 退出。
+
+`GET /api/workspace/bootstrap` 返回 `profile: platform` 与按实例、用户隔离的命名空间。`GET /api/workspace/model-config` 为脱敏只读目录。`POST /api/tasks/quote` 接收生成请求并返回报价，`POST /api/tasks` 必须带 `quoteId`；重放同一提交返回原任务。`GET /api/credits` 返回可用及冻结积分，`GET /api/credits/ledger` 返回分页流水。
+
+管理员接口位于 `/api/admin/accounts`、`/api/admin/channels`、`/api/admin/prices` 和 `/api/admin/usage`，服务层重新检查权限。没有公开注册、助手、用户渠道写入、任意模型代理与外部 Agent 路由。错误继续使用 HTTP 状态及 `{ code, data, msg, reason }` 信封；例如 `insufficient_credits`、`quote_expired`、`model_changed`、`price_changed`。详细流程见[多用户平台](platform.mdx)。
+
+以下存量桌面接口说明仅适用于仍保留的桌面源码入口，不代表平台开放这些能力。
+
 # 本地 HTTP API
 
 图片任务的 `input.config` 支持 Seedream 参数：`seedreamMode`（`image` 或

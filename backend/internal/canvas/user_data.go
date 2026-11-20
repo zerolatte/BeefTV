@@ -412,7 +412,17 @@ func (s *Service) upsertUserCanvasProjectAndPayload(userID string, raw json.RawM
 }
 
 func (s *Service) DeleteUserCanvasProject(userID string, id string) error {
-	return s.repo.DeleteCanvasProject(userID, id)
+	if _, err := s.repo.CanvasProjectForUser(userID, id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return kernel.NewAppError(kernel.CodeNotFound, "画布不存在")
+		}
+		return err
+	}
+	err := s.repo.DeleteCanvasProject(userID, id)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return kernel.NewAppError(kernel.CodeNotFound, "画布不存在")
+	}
+	return err
 }
 
 func AssetFromJSON(userID string, raw json.RawMessage) (model.Asset, error) {

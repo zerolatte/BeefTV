@@ -14,7 +14,7 @@ import { getContextResourceNodes, buildCanvasAgentMentionReferences } from "@/li
 import { listCanvasWorkspaceProjectCanvases } from "@/lib/canvas/canvas-workspace-project";
 import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
 import { persistCanvasTimeline, refreshLocalCanvasProjectIfChanged } from "@/services/local-workspace-repository";
-import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isLocalWorkspaceMode, isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import { createCanvasPageUiStore } from "@/stores/canvas/use-canvas-page-ui-store";
 import { flushCanvasStorePersistence, useCanvasStore } from "@/stores/canvas/use-canvas-store";
 import { useCanvasThemeScope } from "@/stores/canvas/use-canvas-theme-store";
@@ -265,7 +265,7 @@ function InfiniteCanvasPage() {
     });
 
     const versions = useCanvasVersionHistory(projectId, restoreCanvasProjectVersion, currentProject);
-    const internalAssistantEnabled = !isEmbeddedRuntime();
+    const internalAssistantEnabled = !isEmbeddedRuntime() && !isPlatformWorkspaceMode();
     // 画布右侧只有一个栏位：助手和版本记录互斥，谁被打开另一个就让位。
     const assistant = useCanvasAssistant({
         canvasId: projectId,

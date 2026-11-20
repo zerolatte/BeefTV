@@ -1,4 +1,5 @@
-import { apiBaseURL, apiClient, http } from "@/services/api/request";
+import { apiBaseURL, apiClient, http, platformRequestHeaders } from "@/services/api/request";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import { isDesktopStreamingAvailable, subscribeDesktopBootSnapshot } from "@/services/workspace-startup-state";
 
 export type CanvasNodeRef = {
@@ -112,7 +113,7 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
     const desktopToken = apiClient.defaults.headers.common["X-Desktop-Token"];
     const hasDesktopToken = typeof desktopToken === "string" && desktopToken.trim().length > 0;
 
-    if (window.location.protocol === "http:" && !hasDesktopToken && typeof EventSource !== "undefined") {
+    if (!isPlatformWorkspaceMode() && window.location.protocol === "http:" && !hasDesktopToken && typeof EventSource !== "undefined") {
         const source = new EventSource(`${apiBaseURL.replace(/\/+$/u, "")}/canvas-projects/${encodeURIComponent(projectId)}/events`, { withCredentials: true });
         source.addEventListener("canvas.updated", onUpdate);
         return () => {
@@ -133,7 +134,7 @@ function openCanvasEventsStream(projectId: string, onUpdate: () => void): () => 
         const currentToken = apiClient.defaults.headers.common["X-Desktop-Token"];
         const base = (apiBaseURL || "/api").replace(/\/+$/, "");
         const url = `${base}/canvas-projects/${encodeURIComponent(projectId)}/events`;
-        const headers: Record<string, string> = { Accept: "text/event-stream" };
+        const headers: Record<string, string> = { Accept: "text/event-stream", ...platformRequestHeaders() };
         if (typeof currentToken === "string" && currentToken.trim().length > 0) {
             headers["X-Desktop-Token"] = currentToken;
         }

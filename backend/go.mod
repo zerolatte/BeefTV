@@ -86,6 +86,7 @@ require (
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/telemetry v0.0.0-20261009151841-97e8ea77aa2a // indirect
+	golang.org/x/term v0.47.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.52.0 // indirect

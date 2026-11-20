@@ -5,15 +5,23 @@ import { useBeefTVConnection } from "@/components/layout/beeftv-connection-provi
 import { AccountSettingsModal } from "@/components/account-settings/account-settings-modal";
 import { cn } from "@/lib/utils";
 import { isBeefTVAuthenticated } from "@/services/api/beeftv-connection";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
+import { platformLogout } from "@/services/api/platform";
+import { useUserStore } from "@/stores/use-user-store";
+import { App } from "antd";
 
 export function WorkspaceSidebarAccount({ collapsed }: { collapsed: boolean }) {
     const [open, setOpen] = useState(false);
+    const { message } = App.useApp();
+    const user = useUserStore((state) => state.user);
     const account = useBeefTVConnection();
     const { connection, loading } = account;
     const connected = isBeefTVAuthenticated(connection);
     const pending = connection?.state === "pending" || connection?.state === "connecting";
     const name = connection?.account?.display_name || connection?.account?.username || connection?.account?.email || "BeefTV 账户";
     const label = loading ? "正在读取账户" : connected ? name : pending ? "等待登录确认" : "登录 BeefTV";
+
+    if (isPlatformWorkspaceMode()) return <button type="button" className="app-workspace-nav-link" title={`${user?.displayName} · 退出登录`} onClick={() => { void platformLogout().catch((error: Error) => message.error(error.message)); }}><UserRound className="size-4" />{!collapsed && <span>{user?.displayName} · 退出</span>}</button>;
 
     return <>
         <button

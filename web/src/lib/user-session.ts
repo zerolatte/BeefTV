@@ -10,7 +10,7 @@ import { CREATION_PREFERENCES_STORE_KEY, useCreationPreferencesStore } from "@/s
 import { PLUGIN_STORE_KEY, usePluginStore } from "@/stores/use-plugin-store";
 import { defaultFeatureAvailability, useUserStore } from "@/stores/use-user-store";
 import type { WorkspaceBootstrapPayload } from "@/services/api/workspace";
-import { setWorkspaceCapabilitySnapshot } from "@/services/workspace-mode";
+import { isPlatformWorkspaceMode, setWorkspaceCapabilitySnapshot } from "@/services/workspace-mode";
 import { withGenerationConsumersPaused } from "@/services/generation-consumer-lifecycle";
 
 /**
@@ -26,7 +26,7 @@ async function hydrateLocalWorkspace(payload: WorkspaceBootstrapPayload) {
     useUserStore.getState().setHydrated(false);
     setWorkspaceCapabilitySnapshot({
         contractVersion: payload.contractVersion,
-        profile: "local",
+        profile: payload.profile,
         capabilities: payload.capabilities,
     });
 
@@ -84,6 +84,7 @@ async function hydrateLocalWorkspace(payload: WorkspaceBootstrapPayload) {
 
 /** Strip legacy hosted channel snapshots before local provider config is used. */
 export function localWorkspaceConfig(config: AiConfig): AiConfig {
+    if (isPlatformWorkspaceMode()) return normalizeConfigSnapshot({ config: { ...config, channels: config.channels.filter((channel) => channel.scope === "system") } }).config;
     return normalizeConfigSnapshot({
         config: {
             ...config,

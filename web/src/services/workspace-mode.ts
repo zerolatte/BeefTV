@@ -2,7 +2,7 @@ let capabilitySnapshot: WorkspaceCapabilityContract | null = null;
 
 export type WorkspaceCapabilityContract = {
     contractVersion: number;
-    profile: "local";
+    profile: "local" | "platform";
     capabilities: {
         localAssets: boolean;
         providerCalls: boolean;
@@ -13,6 +13,8 @@ export type WorkspaceCapabilityContract = {
 export function isLocalWorkspaceMode() {
     return true;
 }
+
+export function isPlatformWorkspaceMode() { return capabilitySnapshot?.profile === "platform"; }
 
 /**
  * Single capability projection for UI boundaries. Keep the hosted profile

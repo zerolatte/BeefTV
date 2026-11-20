@@ -29,7 +29,7 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	dataDir := env("CANVAS_BACKEND_DATA_DIR", "data")
+	dataDir := env("CANVAS_BACKEND_DATA_DIR", "platform-data")
 	autoMigrate, err := envBool("CANVAS_AUTO_MIGRATE", true)
 	if err != nil {
 		return err

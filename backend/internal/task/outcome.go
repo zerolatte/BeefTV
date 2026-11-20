@@ -27,6 +27,8 @@ type OutcomeFacts struct {
 	ImageResponseAccepted bool
 	SafeImageReplay       bool
 	RequestNotSent        bool
+	CreditFinalized       bool
+	CreditCharged         bool
 }
 
 func ComputeOutcome(task model.Task, resultState string, facts OutcomeFacts) Outcome {
@@ -50,6 +52,12 @@ func ComputeOutcome(task model.Task, resultState string, facts OutcomeFacts) Out
 	}
 	if facts.Unreadable {
 		return out("retrievable", "blocked", "evidence_unavailable")
+	}
+	if facts.CreditFinalized {
+		if facts.CreditCharged {
+			return out("failed", "confirm", ReasonChargedResultUnrecoverable)
+		}
+		return out("failed", "allowed", "no_result")
 	}
 	if outcome, ok := computeProviderSettlementOutcome(task); ok {
 		return outcome

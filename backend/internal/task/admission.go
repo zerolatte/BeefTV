@@ -11,6 +11,12 @@ import (
 )
 
 func (s *Service) admit(userID string, req CreateRequest) (*model.Task, error) {
+	if s.admission != nil {
+		if err := s.admission.Authorize(userID); err != nil {
+			return nil, err
+		}
+	}
+	originalRequest := req
 	operationKey, err := ClientOperationID(req.Input)
 	if err != nil {
 		return nil, err
@@ -31,8 +37,18 @@ func (s *Service) admit(userID string, req CreateRequest) (*model.Task, error) {
 			return nil, lookupErr
 		}
 		if existing != nil {
+			if req.PrepareOnly {
+				return nil, kernel.NewAppError(kernel.CodeConflict, "此提交已经创建任务，请读取原任务")
+			}
 			return admitExisting(*existing, req, s.deps.Present)
 		}
+	}
+	if s.admission != nil {
+		validated, err := s.admission.Validate(userID, req)
+		if err != nil {
+			return nil, err
+		}
+		req = validated
 	}
 	if strings.TrimSpace(req.AdmissionID) == "" && IsRetiredAgentTaskInput(req.Operation, req.Input) {
 		return nil, kernel.BadAuthRequest(RetiredAgentBoundaryMessage)
@@ -176,8 +192,12 @@ func (s *Service) admit(userID string, req CreateRequest) (*model.Task, error) {
 	if s.deps.Present == nil {
 		return nil, unavailable()
 	}
-	err = s.deps.Persist.CreateAdmitted(&task, limit)
-	if mapped, mapErr := mapPersistError(err, req, s.deps.Present, limit); mapErr != nil || mapped != nil {
+	if s.admission != nil {
+		err = s.admission.CreateAdmitted(&task, limit, originalRequest)
+	} else {
+		err = s.deps.Persist.CreateAdmitted(&task, limit)
+	}
+	if mapped, mapErr := mapPersistError(err, originalRequest, s.deps.Present, limit); mapErr != nil || mapped != nil {
 		return mapped, mapErr
 	}
 	if !textReplay && s.deps.Activity != nil {

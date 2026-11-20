@@ -383,7 +383,7 @@ func ResolveProviderConfig(repo *repository.Repository, localMode bool, systemCh
 		return Config{}, err
 	}
 	config.Headers = headers
-	if localMode && strings.TrimSpace(config.ChannelID) != "" {
+	if localMode && !repo.PlatformMode() && strings.TrimSpace(config.ChannelID) != "" {
 		return Config{}, errors.New("本地工作区不支持系统渠道配置")
 	}
 	channelID := strings.TrimSpace(config.ChannelID)

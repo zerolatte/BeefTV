@@ -219,6 +219,9 @@ func (s *Service) CreateDepthCaptureTask(userID string, req DepthCaptureCreateRe
 }
 
 func (s *Service) admitSpecialized(userID string, req specializedAdmission) (*model.Task, error) {
+	if s.admission != nil {
+		return nil, kernel.Forbidden("此任务类型未在平台开放")
+	}
 	normalizedInput, err := NormalizeInput(req.input)
 	if err != nil {
 		return nil, err

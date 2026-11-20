@@ -16,12 +16,14 @@ import { applyAppearanceMetadata, useAppearanceStore } from "@/stores/use-appear
 import { useUserStore } from "@/stores/use-user-store";
 import { watchSystemTheme } from "@/stores/use-theme-store";
 import { BeefTVConnectionProvider } from "@/components/layout/beeftv-connection-provider";
+import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
+import { PlatformQuoteHost } from "@/pages/platform/quote-host";
 
 const ClientRootInit = lazy(() => import("@/components/layout/client-root-init").then((module) => ({ default: module.ClientRootInit })));
 
 function ClientRootBoundary({ children }: { children: ReactNode }) {
     const authenticated = useUserStore((state) => Boolean(state.user));
-    if (!authenticated) return children;
+    if (!authenticated || isPlatformWorkspaceMode()) return children;
     return <Suspense fallback={<FullScreenLoader label="正在准备创作环境" detail="连接本地能力与模型配置" />}><ClientRootInit>{children}</ClientRootInit></Suspense>;
 }
 
@@ -51,7 +53,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                         children
                     ) : (
                         <WorkspaceBootstrapHydrator>
-                            <ClientRootBoundary><BeefTVConnectionProvider>{children}</BeefTVConnectionProvider></ClientRootBoundary>
+                            <ClientRootBoundary><BeefTVConnectionProvider>{children}{isPlatformWorkspaceMode() && <PlatformQuoteHost />}</BeefTVConnectionProvider></ClientRootBoundary>
                         </WorkspaceBootstrapHydrator>
                     )}
                 </QueryClientProvider>

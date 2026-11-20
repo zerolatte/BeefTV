@@ -7,22 +7,20 @@ services:
       args:
         GOPROXY: ${GOPROXY:-https://goproxy.cn,direct}
     environment:
-      CANVAS_LOCAL_MODE: "true"
       # 容器内监听所有接口，供同一 Compose 网络中的 web 反代访问。宿主机不要对所有网卡发布 8080。
       CANVAS_BACKEND_ADDR: ":8080"
-      CANVAS_BACKEND_DATA_DIR: /data
+      CANVAS_BACKEND_DATA_DIR: /data/platform
       CANVAS_SHUTDOWN_TIMEOUT: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
       CANVAS_DATABASE_DRIVER: ${CANVAS_DATABASE_DRIVER:-sqlite}
       CANVAS_WORKER_CONCURRENCY: ${CANVAS_WORKER_CONCURRENCY:-3}
       CANVAS_CHANNEL_CONCURRENCY: ${CANVAS_CHANNEL_CONCURRENCY:-3}
-      CANVAS_REGISTRATION_ENABLED: ${CANVAS_REGISTRATION_ENABLED:-false}
       CANVAS_ALLOW_PRIVATE_UPSTREAMS: ${CANVAS_ALLOW_PRIVATE_UPSTREAMS:-true}
       CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS: ${CANVAS_ALLOWED_PRIVATE_UPSTREAM_HOSTS:-}
-      CANVAS_CORS_ORIGINS: ${CANVAS_CORS_ORIGINS:-http://localhost:3000}
+      CANVAS_PUBLIC_ORIGIN: ${CANVAS_PUBLIC_ORIGIN:-http://localhost:3000}
       ENABLE_PROVIDER_PLUGINS: ${ENABLE_PROVIDER_PLUGINS:-false}
       GIN_MODE: release
     volumes:
-      - backend-data:/data
+      - platform-data:/data
     restart: unless-stopped
     stop_grace_period: ${CANVAS_SHUTDOWN_TIMEOUT:-10m}
     develop:
@@ -38,7 +36,7 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       backend:
         condition: service_healthy
@@ -61,4 +59,4 @@ services:
           path: ./CHANGELOG.md
 
 volumes:
-  backend-data:
+  platform-data:

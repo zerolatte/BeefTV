@@ -13,7 +13,7 @@ import (
 
 func (r *Repository) ReleaseTaskLease(id string, owner string) error {
 	return r.db.Model(&model.Task{}).
-		Where("id = ? AND status = ? AND lease_owner = ?", id, model.TaskStatusRunning, owner).
+		Where("id = ? AND lease_owner = ?", id, owner).
 		Updates(map[string]any{"lease_owner": "", "lease_expires_at": nil, "updated_at": time.Now()}).Error
 }
 
@@ -72,6 +72,10 @@ func (r *Repository) ClaimNextTask(owner string, leaseDuration time.Duration) (*
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		query := tx.Where("(status = ? OR (status = ? AND (lease_expires_at IS NULL OR lease_expires_at <= ?))) AND (next_poll_at IS NULL OR next_poll_at <= ?)", model.TaskStatusQueued, model.TaskStatusRunning, now, now).
 			Order("created_at asc").Limit(1)
+		if r.platform {
+			// 停用账号禁止开始新提交，已经接受的上游任务仍须完成查询与结算。
+			query = query.Where("(user_id IN (SELECT id FROM platform_accounts WHERE status = ? AND must_change_password = ?) OR (status = ? AND provider_request_id <> '')) AND id IN (SELECT task_id FROM credit_reservations WHERE state IN ?)", model.UserStatusActive, false, model.TaskStatusRunning, []string{"reserved", "review"})
+		}
 		result := query.Find(&task)
 		if result.Error != nil {
 			return result.Error
@@ -162,6 +166,9 @@ func (r *Repository) ClaimFailedTaskProviderRecovery(id string, userID string, o
 	if strings.TrimSpace(userID) != "" {
 		query = query.Where("user_id = ?", userID)
 	}
+	if r.platform {
+		query = query.Where("id IN (SELECT task_id FROM credit_reservations WHERE state IN ?) AND (lease_owner = '' OR lease_expires_at IS NULL OR lease_expires_at <= ?)", []string{"reserved", "review"}, now)
+	}
 	result := query.Updates(map[string]any{
 		"lease_owner":      owner,
 		"lease_expires_at": now.Add(leaseDuration),
@@ -238,8 +245,7 @@ func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskSta
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		updated := taskLeaseWriter(tx.Model(&model.Task{}), task.LeaseOwner).
 			Where("id = ? AND status = ?", task.ID, expected).
-			// Completion owns the result, not the worker's routing, lease or
-			// cancellation snapshot, which may have changed during execution.
+			// 结果入库不覆盖执行期间变化的路由和取消快照；事务末尾单独释放租约。
 			Select("status", "stage", "progress", "result_json", "input_json", "workflow_source_cipher", "text_draft", "error", "error_code", "failure_diagnostics", "recovery_outcome", "next_poll_at", "completed_at", "updated_at").Updates(task)
 		if updated.Error != nil {
 			return updated.Error
@@ -252,7 +258,12 @@ func (r *Repository) SaveTaskCompletion(task *model.Task, expected model.TaskSta
 				return err
 			}
 		}
-		return nil
+		// 结果与终态已在同一事务中持久化，立即释放本执行者租约供积分对账。
+		if !r.platform {
+			return nil
+		}
+		return tx.Model(&model.Task{}).Where("id = ? AND lease_owner = ?", task.ID, task.LeaseOwner).
+			Updates(map[string]any{"lease_owner": "", "lease_expires_at": nil}).Error
 	})
 }
 

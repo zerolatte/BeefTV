@@ -7,7 +7,7 @@ import { emitPluginEvent } from "@/lib/plugins/plugin-events";
 import { ApiError } from "@/services/api/request";
 import { getActiveUserScope, onStorageNamespaceChange, scopedLocalStorage } from "@/lib/user-scope";
 import { flushModelConfig, getModelConfigPersistenceState } from "@/services/model-config-repository";
-import { workspaceCapabilities } from "@/services/workspace-mode";
+import { isPlatformWorkspaceMode, workspaceCapabilities } from "@/services/workspace-mode";
 import { saveCanvasForAssistant } from "@/services/assistant-canvas-save";
 import {
     activateAssistantSession,
@@ -106,7 +106,7 @@ const readStoredOpen = (embedded: boolean) => !embedded && scopedLocalStorage.ge
 const readStoredWidth = () => clampAssistantWidth(Number(scopedLocalStorage.getItem(WIDTH_STORAGE_KEY)) || ASSISTANT_DEFAULT_WIDTH);
 
 export function useCanvasAssistant({ canvasId, onCanvasChanged }: Options) {
-    const embedded = isEmbeddedRuntime();
+    const embedded = isEmbeddedRuntime() || isPlatformWorkspaceMode();
     const [open, setOpenState] = useState(() => readStoredOpen(embedded));
     const [width, setWidthState] = useState(readStoredWidth);
     const [status, setStatus] = useState<AgentHostStatus | null>(null);

@@ -11,9 +11,20 @@ import (
 // NewService is the domain constructor; it does not require every port.
 // Operations fail closed when a collaborator needed on that path is missing.
 type Service struct {
-	store Store
-	deps  Dependencies
+	store     Store
+	deps      Dependencies
+	admission AdmissionPolicy
 }
+
+// AdmissionPolicy 在平台组合根配置，所有生成提交共用校验和原子记账入口。
+type AdmissionPolicy interface {
+	Authorize(string) error
+	Validate(string, CreateRequest) (CreateRequest, error)
+	CreateAdmitted(*model.Task, int, CreateRequest) error
+}
+
+// ConfigureAdmission 只能在启动 Worker 和 HTTP 服务前调用。
+func (s *Service) ConfigureAdmission(policy AdmissionPolicy) { s.admission = policy }
 
 func NewService(store Store, deps Dependencies) *Service {
 	if deps.NewID == nil {

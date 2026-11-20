@@ -10,7 +10,11 @@ import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceterni
 import { loadAgentsPage, loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadHomePage, loadProjectDetailPage } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
 import RouteErrorPage from "@/pages/route-error";
-import { isLocalWorkspaceMode } from "@/services/workspace-mode";
+import { isLocalWorkspaceMode, isPlatformWorkspaceMode } from "@/services/workspace-mode";
+import { useUserStore } from "@/stores/use-user-store";
+
+const CreditsPage = lazy(() => import("@/pages/platform/credits"));
+const PlatformAdminPage = lazy(() => import("@/pages/platform/admin"));
 
 const AgentsPage = lazy(loadAgentsPage);
 const AssetsPage = lazy(loadAssetsPage);
@@ -48,6 +52,7 @@ function WorkspaceLayout() {
     }, [navigate]);
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
+    if (isPlatformWorkspaceMode() && (/^\/(skills?|agents|plugins|settings|p)(\/|$)/.test(pathname) || (pathname.startsWith("/admin") && useUserStore.getState().user?.role !== "admin"))) return <Navigate to="/" replace />;
     return <Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense>;
 }
 
@@ -109,6 +114,8 @@ export const router = createWorkspaceRouter([
         element: <WorkspaceLayout />,
         errorElement: <RouteErrorPage />,
         children: [
+            { path: "/credits", element: deferred(<CreditsPage />) },
+            { path: "/admin", element: deferred(<PlatformAdminPage />) },
             { path: "/", element: deferred(<HomePage />) },
             { path: "/create", element: deferred(<CreatePage />) },
             {
