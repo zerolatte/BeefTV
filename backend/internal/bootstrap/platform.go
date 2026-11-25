@@ -9,6 +9,7 @@ import (
 	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/handler"
 	"infinite-canvas/backend/internal/identity"
+	"infinite-canvas/backend/internal/operations"
 	"infinite-canvas/backend/internal/platformadmin"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/runtimeinfo"
@@ -102,6 +103,7 @@ func openPlatform(cfg Config) (result *Runtime, openErr error) {
 	handler.RegisterPlatformWorkspace(private, svc, billing, instance.ID)
 	handler.RegisterPlatformAdmin(private, auth, billing, platformadmin.New(auth, repo, svc))
 	handler.RegisterPlatformCreative(private, svc)
+	handler.RegisterPlatformCanvasOperations(private, svc, operations.NewStore(db))
 	router.NoRoute(func(c *gin.Context) { c.JSON(404, gin.H{"code": 404, "reason": "not_found", "msg": "请求不存在"}) })
 	return &Runtime{cfg: cfg, db: db, service: svc, handler: router, status: status, workspaceLock: lock, serveErr: make(chan error, 1), platformCredits: billing}, nil
 }

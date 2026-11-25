@@ -17,10 +17,11 @@ export type CollectionHeaderProps<Value extends string> = {
     value: Value;
     onChange: (value: Value) => void;
     navigationLabel: string;
+    navigation?: ReactNode;
     trailing?: ReactNode;
 };
 
-export function CollectionHeader<Value extends string>({ title, className, search, actions, createItems, primaryAction, tabs, value, onChange, navigationLabel, trailing }: CollectionHeaderProps<Value>) {
+export function CollectionHeader<Value extends string>({ title, className, search, actions, createItems, primaryAction, tabs, value, onChange, navigationLabel, navigation, trailing }: CollectionHeaderProps<Value>) {
     return (
         <div className={cn("studio-band collection-header", className)}>
             <PageHeader title={title} actions={
@@ -36,6 +37,7 @@ export function CollectionHeader<Value extends string>({ title, className, searc
                     </div>
                 </div>
             } />
+            {navigation}
             <div className="assets-kind-row">
                 <nav className="assets-kind-tabs" aria-label={navigationLabel}>
                     {tabs.map((tab) => (

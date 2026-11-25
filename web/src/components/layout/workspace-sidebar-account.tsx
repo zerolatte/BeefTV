@@ -21,7 +21,7 @@ export function WorkspaceSidebarAccount({ collapsed }: { collapsed: boolean }) {
     const name = connection?.account?.display_name || connection?.account?.username || connection?.account?.email || "BeefTV 账户";
     const label = loading ? "正在读取账户" : connected ? name : pending ? "等待登录确认" : "登录 BeefTV";
 
-    if (isPlatformWorkspaceMode()) return <button type="button" className="app-workspace-nav-link" title={`${user?.displayName} · 退出登录`} onClick={() => { void platformLogout().catch((error: Error) => message.error(error.message)); }}><UserRound className="size-4" />{!collapsed && <span>{user?.displayName} · 退出</span>}</button>;
+    if (isPlatformWorkspaceMode()) return <button type="button" className={cn("app-workspace-nav-link app-workspace-official-account app-workspace-platform-account", collapsed && "is-collapsed")} aria-label={`${user?.displayName} · 退出登录`} title={`${user?.displayName} · 退出登录`} onClick={() => { void platformLogout().catch((error: Error) => message.error(error.message)); }}><UserRound className="size-4 shrink-0" />{!collapsed && <span className="truncate">{user?.displayName} · 退出</span>}</button>;
 
     return <>
         <button

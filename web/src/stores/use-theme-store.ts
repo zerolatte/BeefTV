@@ -15,7 +15,7 @@ type ThemeStore = {
 };
 
 function themeSelection(value: unknown) {
-    const preference: ThemePreference = value === "system" ? "system" : normalizeTheme(value);
+    const preference: ThemePreference = value === "system" ? "system" : value === "dark" ? "dark" : "light";
     const theme = preference === "system"
         ? (typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
         : preference;
@@ -35,8 +35,8 @@ export function watchSystemTheme(media: Pick<MediaQueryList, "matches" | "addEve
 export const useThemeStore = create<ThemeStore>()(
     persist(
         (set) => ({
-            theme: "dark",
-            preference: "dark",
+            theme: "light",
+            preference: "light",
             setTheme: (theme) => set(themeSelection(theme)),
         }),
         {

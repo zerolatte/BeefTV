@@ -21,6 +21,7 @@ type CanvasProjectCreator interface {
 // 内置助手的付费生成先提议、由界面确认；外部客户端负责自身执行审批。
 // 未经参数与费用风险验收的能力明确不注册，而不是提供 stub 伪成功。
 func RegisterDefaultOps(r *Registry) {
+	RegisterCanvasPersistenceOps(r)
 	registerCanvasEditOps(r)
 	registerCanvasNodeBindAsset(r)
 	registerAgentGuideOp(r)
@@ -80,16 +81,10 @@ func RegisterDefaultOps(r *Registry) {
 	r.Register(Op{ReplaySafe: true, AssistantCanvas: true, ID: "canvas.script.row.remove", Summary: "按行 ID 删除分镜行并重排镜号", Scope: ScopeCanvas,
 		Params:  storyboardRowRemoveSchema(),
 		Handler: opStoryboardRowRemove})
-	r.Register(Op{ReplaySafe: true, ID: "canvas.document.commit", Summary: "按 revision 提交整份画布文档", Scope: ScopeCanvas,
-		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"expectedRevision":{"type":"integer"},"document":{"type":"object"}},"required":["canvasId","expectedRevision","document"]}`),
-		Handler: opCanvasDocumentCommit})
 	// 付费生成只提议不执行：这里校验目标并给出用户要确认的模型，真正的生成由界面在用户确认后发起。
 	r.Register(Op{AssistantProposal: true, AssistantCanvas: true, ID: "canvas.generation.propose", Summary: "按节点已保存参数冻结生成单与报价。核对返回的 targets.parameters 和 estimate 后再提交，参数或报价不一致时停止", ReadOnly: true, Scope: ScopeCanvas,
 		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"nodeIds":{"type":"array","items":{"type":"string"},"minItems":1,"maxItems":8},"kind":{"type":"string","enum":["image","video","audio"]},"productionNodeIds":{"type":"array","items":{"type":"string"},"maxItems":24,"description":"本批生成的节点（每批≤24，超出分批提案）；nodeIds 只列已就绪首批"},"note":{"type":"string"}},"required":["canvasId","nodeIds","kind"]}`),
 		Handler: opCanvasGenerationPropose})
-	r.Register(Op{ReplaySafe: true, AssistantCanvas: true, ID: "canvas.task.bind", Summary: "把已交付任务产物绑定到节点", Scope: ScopeCanvas,
-		Params:  json.RawMessage(`{"type":"object","properties":{"canvasId":{"type":"string"},"taskId":{"type":"string"},"nodeId":{"type":"string"},"outputIndex":{"type":"integer"}},"required":["canvasId","taskId","nodeId"]}`),
-		Handler: opCanvasTaskBind, ProjectReplay: projectCanvasTaskBindReplay})
 	r.Register(Op{ID: "conversation.message.attach", Summary: "把已交付任务产物绑定到对话消息", Scope: ScopeConversation,
 		Params:  json.RawMessage(`{"type":"object","properties":{"conversationId":{"type":"string"},"taskId":{"type":"string"},"messageId":{"type":"string"},"outputIndex":{"type":"integer"}},"required":["conversationId","taskId","messageId"]}`),
 		Handler: opConversationMessageAttach, ProjectReplay: projectConversationMessageAttachReplay})

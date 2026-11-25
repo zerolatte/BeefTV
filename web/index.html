@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN" class="dark font-sans" style="color-scheme: dark">
+<html lang="zh-CN" class="font-sans" style="color-scheme: light">
     <head>
         <meta charset="UTF-8" />
         <base href="/" />
@@ -12,14 +12,14 @@
             html,
             body {
                 margin: 0;
-                background: var(--background, #0f0f0f);
+                background: var(--background, #f8f8fa);
             }
             #root:empty {
                 position: fixed;
                 inset: 0;
                 min-height: 100vh;
                 overflow: hidden;
-                background: #090909;
+                background: var(--background);
             }
             #root:empty::after {
                 content: "";
@@ -29,7 +29,7 @@
                 width: min(240px, 42vw);
                 aspect-ratio: 17 / 10;
                 transform: translate(-50%, -50%);
-                background: linear-gradient(105deg, #c9c9c9 0%, #e4e4e4 43%, #fff 49%, #fff 52%, #e4e4e4 58%, #c9c9c9 100%);
+                background: var(--bootstrap-ink);
                 background-size: 240% 100%;
                 background-position: 100% 0;
                 -webkit-mask: url('/beef-logo.png') center / contain no-repeat;
@@ -43,19 +43,22 @@
             @media (prefers-reduced-motion: reduce) {
                 #root:empty::after {
                     animation: none;
-                    background: #f2f2f2;
+                    background: var(--bootstrap-ink);
                 }
             }
         </style>
         <script>
-            // Match the saved preference before the first paint; invalid storage stays dark.
-            let theme = "dark";
+            // 首屏遵循已保存的偏好；新用户与无效存储使用浅色主题。
+            let theme = "light";
             try {
-                if (JSON.parse(localStorage.getItem("infinite-canvas:theme_store"))?.state?.theme === "light") theme = "light";
+                const saved = JSON.parse(localStorage.getItem("infinite-canvas:theme_store"))?.state;
+                const preference = saved?.preference ?? saved?.theme;
+                theme = preference === "system" ? (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : preference === "dark" ? "dark" : "light";
             } catch {}
             document.documentElement.classList.toggle("dark", theme === "dark");
             document.documentElement.style.colorScheme = theme;
-            document.documentElement.style.setProperty("--background", theme === "dark" ? "#0f0f0f" : "#f5f5f5");
+            document.documentElement.style.setProperty("--background", theme === "dark" ? "#101010" : "#f8f8fa");
+            document.documentElement.style.setProperty("--bootstrap-ink", theme === "dark" ? "#f3f3f5" : "#1d1d21");
         </script>
     </head>
     <body class="bg-background text-foreground antialiased">

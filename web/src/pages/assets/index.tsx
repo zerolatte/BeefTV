@@ -132,7 +132,24 @@ export default function AssetsPage() {
                 }}
             />
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page collection-page">
+
                 <CollectionHeader
+                    navigation={
+                <aside className="assets-library-source-rail" aria-label="资产来源导航">
+                    <div className="assets-library-source-rail-inner">
+                        <button type="button" className="assets-library-source-rail-item" onClick={() => c.navigate("/assets?tab=history")}>
+                            <span className="assets-library-source-rail-icon"><History className="size-3.5" /></span>
+                            <span>生成历史</span>
+                            <span className="assets-filter-count">{c.generationHistoryCount}</span>
+                        </button>
+                        <button type="button" className="assets-library-source-rail-item is-active" aria-current="page">
+                            <span className="assets-library-source-rail-icon"><FolderOpen className="size-3.5" /></span>
+                            <span>个人资产库</span>
+                            <span className="assets-filter-count">{c.totalAssets}</span>
+                        </button>
+                    </div>
+                </aside>
+                    }
                     className="assets-library-hero"
                     title="个人资产库"
                     search={{ value: c.keyword, placeholder: "搜索资产", onChange: (value) => { c.setPage(1); c.setKeyword(value); } }}
@@ -332,20 +349,7 @@ export default function AssetsPage() {
                         </section>
                     </div>
                 </div>
-                <aside className="assets-library-source-rail" aria-label="资产来源导航">
-                    <div className="assets-library-source-rail-inner">
-                        <button type="button" className="assets-library-source-rail-item" onClick={() => c.navigate("/assets?tab=history")}>
-                            <span className="assets-library-source-rail-icon"><History className="size-3.5" /></span>
-                            <span>生成历史</span>
-                            <span className="assets-filter-count">{c.generationHistoryCount}</span>
-                        </button>
-                        <button type="button" className="assets-library-source-rail-item is-active" aria-current="page">
-                            <span className="assets-library-source-rail-icon"><FolderOpen className="size-3.5" /></span>
-                            <span>个人资产库</span>
-                            <span className="assets-filter-count">{c.totalAssets}</span>
-                        </button>
-                    </div>
-                </aside>
+
             </WorkspacePage>
 
             <AssetsLibraryModals

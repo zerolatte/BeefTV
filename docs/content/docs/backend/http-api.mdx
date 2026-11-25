@@ -10,6 +10,8 @@ title: 本地 HTTP API
 
 管理员接口位于 `/api/admin/accounts`、`/api/admin/channels`、`/api/admin/prices` 和 `/api/admin/usage`，服务层重新检查权限。没有公开注册、助手、用户渠道写入、任意模型代理与外部 Agent 路由。错误继续使用 HTTP 状态及 `{ code, data, msg, reason }` 信封；例如 `insufficient_credits`、`quote_expired`、`model_changed`、`price_changed`。详细流程见[多用户平台](platform.mdx)。
 
+平台画布保存使用 `POST /api/ops/canvas.document.commit`，请求体为 `{ opId, params: { canvasId, expectedRevision, document } }`。会话决定账号身份，服务端校验画布归属；文档与幂等回执同事务提交。同一 `opId` 和内容重试返回原回执，旧版本提交返回 `409 / stale_revision`。`POST /api/ops/canvas.task.bind` 复用相同账号校验，将已交付任务结果绑定到原节点；不会创建生成任务。`GET /api/ops/external-writes?canvasId=...` 只返回当前账号的画布外部改动记录。其他操作层与外部客户端入口不在平台开放。
+
 以下存量桌面接口说明仅适用于仍保留的桌面源码入口，不代表平台开放这些能力。
 
 # 本地 HTTP API

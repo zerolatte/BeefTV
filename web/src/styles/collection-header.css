@@ -11,10 +11,10 @@
     justify-content: center;
     gap: 8px;
     padding: 0 14px;
-    border: 1px solid #fff;
-    border-radius: 8px;
-    background: #fff;
-    color: #171717;
+    border: 1px solid var(--user-action-bg);
+    border-radius: var(--r-md);
+    background: var(--user-action-bg);
+    color: var(--user-action-foreground);
     font-size: 13px;
     font-weight: 550;
     line-height: 20px;
@@ -23,9 +23,9 @@
 }
 
 .collection-header-create:hover {
-    border-color: #f1f1f1;
-    background: #f1f1f1;
-    color: #111;
+    border-color: var(--user-action-bg-hover);
+    background: var(--user-action-bg-hover);
+    color: var(--user-action-foreground);
 }
 
 .collection-header-create:focus-visible {
@@ -78,7 +78,7 @@
 
 .collection-header .assets-kind-tab span {
     min-width: 16px;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 .collection-header .assets-kind-tab:focus-visible {
@@ -88,7 +88,7 @@
 
 @media (max-width: 720px) {
     .app-product-workspace .collection-page > .app-section-page-content {
-        padding-inline: 16px;
+        padding-inline: 20px;
     }
 
     .app-product-workspace .app-section-page .collection-header > .app-section-page-header {
@@ -98,10 +98,6 @@
         flex-wrap: wrap;
         gap: 8px 16px;
         padding-block: 10px;
-    }
-
-    .collection-header .app-page-header-main {
-        padding-inline-start: 32px;
     }
 
     .collection-header .assets-header-action-buttons {

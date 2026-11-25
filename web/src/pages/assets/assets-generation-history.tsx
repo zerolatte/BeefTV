@@ -96,6 +96,7 @@ export function GenerationHistorySurface({
     return (
         <>
             <WorkspacePage grid className="library-page assets-library-page canvas-library-page generation-history-page">
+
                 <div className="studio-band assets-library-hero">
                     <PageHeader
                         title="生成历史"
@@ -105,6 +106,18 @@ export function GenerationHistorySurface({
                             </div>
                         }
                     />
+                <aside className="assets-library-source-rail" aria-label="资产来源导航">
+                    <div className="assets-library-source-rail-inner">
+                        <button type="button" className="assets-library-source-rail-item is-active" aria-current="page">
+                            <span className="assets-library-source-rail-icon"><History className="size-3.5" /></span>
+                            <span>生成历史</span><span className="assets-filter-count">{counts.all}</span>
+                        </button>
+                        <button type="button" className="assets-library-source-rail-item" onClick={onSelectPersonal}>
+                            <span className="assets-library-source-rail-icon"><FolderOpen className="size-3.5" /></span>
+                            <span>个人资产库</span><span className="assets-filter-count">{libraryTotal}</span>
+                        </button>
+                    </div>
+                </aside>
                     <div className="generation-history-type-tabs" role="tablist" aria-label="生成类型">
                         {typeTabs.map(([value, label, count]) => (
                             <button key={value} type="button" className={cn("generation-history-type-tab", activeType === value && "is-active")} role="tab" aria-selected={activeType === value} onClick={() => setActiveType(value)}>
@@ -161,18 +174,7 @@ export function GenerationHistorySurface({
                         )
                     ) : null}
                 </div>
-                <aside className="assets-library-source-rail" aria-label="资产来源导航">
-                    <div className="assets-library-source-rail-inner">
-                        <button type="button" className="assets-library-source-rail-item is-active" aria-current="page">
-                            <span className="assets-library-source-rail-icon"><History className="size-3.5" /></span>
-                            <span>生成历史</span><span className="assets-filter-count">{counts.all}</span>
-                        </button>
-                        <button type="button" className="assets-library-source-rail-item" onClick={onSelectPersonal}>
-                            <span className="assets-library-source-rail-icon"><FolderOpen className="size-3.5" /></span>
-                            <span>个人资产库</span><span className="assets-filter-count">{libraryTotal}</span>
-                        </button>
-                    </div>
-                </aside>
+
             </WorkspacePage>
             <Modal
                 className="library-modal library-confirm-modal"

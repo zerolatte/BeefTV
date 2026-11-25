@@ -93,9 +93,6 @@
     .app-product-workspace .plugin-card:hover,
     .app-product-workspace .skill-library-card:hover,
     .app-product-workspace .task-record-row:hover { transform: none !important; }
-    .app-user-workspace .app-workspace-nav-link,
-    .app-user-workspace .app-workspace-nav-icon,
-    .app-user-workspace .app-workspace-nav-icon svg { animation: none !important; transform: none !important; }
 }
 
 /* Final shell geometry uses the shared light/dark semantic palette. */
@@ -123,62 +120,8 @@
     border-bottom: 0 !important;
     box-shadow: none !important;
 }
-.app-user-workspace.app-product-workspace .app-workspace-brand-placeholder {
-    color: #0b0b0b;
-    font-size: 20px;
-    font-style: italic;
-    font-weight: 900;
-    letter-spacing: -.08em;
-    line-height: 1;
-}
-.app-user-workspace.app-product-workspace .app-workspace-brand-wordmark {
-    overflow: visible !important;
-    padding: 1px 2px 2px 0;
-    text-overflow: clip !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"],
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"] :is(.app-workspace-nav-title, .app-workspace-nav-icon, svg) {
-    color: var(--user-action-foreground) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-sidebar-footer {
-    border-top-color: var(--user-border) !important;
-    background: var(--user-surface-muted) !important;
-    box-shadow: none !important;
-}
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar,
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar-nav,
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar-footer {
-    background: var(--user-surface) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-brand-tagline {
-    color: var(--user-ink-soft) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link:not([data-nav-id="new"]) {
-    min-height: 50px !important;
-    color: var(--user-ink-muted) !important;
-    font-size: 16px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"] {
-    min-height: 50px !important;
-    font-size: 16px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link.is-active:not([data-nav-id="new"]) {
-    background: var(--user-surface-hover) !important;
-    color: var(--user-ink) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link:hover:not(.is-active):not([data-nav-id="new"]) {
-    background: var(--user-surface-hover) !important;
-    color: var(--user-ink) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-group-toggle {
-    color: var(--user-ink-soft) !important;
-}
 .app-user-workspace.app-product-workspace .app-workspace-sidebar-profile {
     color: var(--user-ink-muted) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-sidebar-scroll-area {
-    gap: 6px !important;
-    padding: 0 19px 18px !important;
 }
 @media (max-width: 1500px) {
     .app-user-workspace.app-product-workspace .app-workspace-topbar {
@@ -188,59 +131,6 @@
 }
 
 /* LibTV desktop baseline: 1470x716 CSS px, DPR 2, zoom 1. */
-.app-user-workspace.app-product-workspace .app-workspace-sidebar-brand-row {
-    height: 64px !important;
-    min-height: 64px !important;
-    padding: 12px 14px 8px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-sidebar-brand-button {
-    min-height: 44px !important;
-    padding: 0 7px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-sidebar-scroll-area {
-    gap: 6px !important;
-    padding: 0 14px 18px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-group[data-nav-group-heading=""] > div {
-    gap: 4px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-group + .app-workspace-nav-group {
-    padding-top: 11px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link,
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"],
-.app-user-workspace.app-product-workspace .app-workspace-nav-link:not([data-nav-id="new"]) {
-    height: 36px !important;
-    min-height: 36px !important;
-    padding: 0 10px !important;
-    border-radius: 6px !important;
-    font-size: 14px !important;
-    line-height: 22px !important;
-    font-weight: 400 !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"] {
-    margin-bottom: 0 !important;
-    background: var(--user-action-bg) !important;
-    color: var(--user-action-foreground) !important;
-    font-weight: 400 !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link[data-nav-id="new"]:hover {
-    background: var(--user-action-bg-hover) !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link.is-active:not([data-nav-id="new"]) {
-    background: var(--user-surface-hover) !important;
-    font-weight: 400 !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link .app-workspace-nav-icon {
-    width: 20px !important;
-    height: 20px !important;
-    flex-basis: 20px !important;
-    border-radius: 0 !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-nav-link .app-workspace-nav-icon svg {
-    width: 20px !important;
-    height: 20px !important;
-}
 .app-user-workspace.app-product-workspace .app-workspace-topbar-utility {
     height: 32px !important;
     gap: 7px !important;
@@ -252,11 +142,6 @@
 .app-user-workspace.app-product-workspace .app-workspace-topbar-utility svg {
     width: 15px !important;
     height: 15px !important;
-}
-.app-user-workspace.app-product-workspace .app-workspace-topbar-icon-button {
-    width: 32px !important;
-    height: 32px !important;
-    border-radius: 8px !important;
 }
 
 @media (max-width: 720px) {

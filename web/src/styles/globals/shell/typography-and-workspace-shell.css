@@ -51,71 +51,11 @@
         --workspace-accent-soft: rgba(255, 255, 255, 0.08);
     }
 
-
-    .app-workspace-sidebar-scrim {
-        position: absolute;
-        z-index: 30;
-        inset: 0;
-        border: 0;
-        background: rgba(0, 0, 0, 0.42);
-        backdrop-filter: blur(2px);
-    }
-
-
     /* 侧栏导航子项展开引导线：替代每组子项自行维护的分割线 */
-    .app-workspace-nav-guide-line {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 0;
-        border-left: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
-        pointer-events: none;
-    }
 
     /* 分组标题：小号大写标签，弱化但可读；有标题的分组支持折叠，padding/间距由折叠按钮接管 */
-    .app-workspace-nav-group-label {
-        display: block;
-        font-size: var(--fs-label);
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: color-mix(in srgb, var(--foreground) 36%, transparent);
-        transition: color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-nav-group-toggle {
-        display: flex;
-        width: 100%;
-        min-height: 28px;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 0 8px;
-        border-radius: var(--r-sm);
-        text-align: left;
-        color: inherit;
-        transition: background-color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-nav-group-toggle:hover,
-    .app-workspace-nav-group-toggle:focus-visible {
-        background: var(--surface-hover);
-    }
-
-    .app-workspace-nav-group-toggle:hover .app-workspace-nav-group-label,
-    .app-workspace-nav-group-toggle:focus-visible .app-workspace-nav-group-label {
-        color: color-mix(in srgb, var(--foreground) 55%, transparent);
-    }
-
-    .app-workspace-nav-group-toggle:hover svg,
-    .app-workspace-nav-group-toggle:focus-visible svg {
-        color: color-mix(in srgb, var(--foreground) 70%, transparent);
-    }
 
     /* 工作区切换器下拉浮层 */
-    .app-workspace-nav-popover {
-        box-shadow: none;
-    }
 
     .workspace-account-popover .ant-popover-inner {
         border-color: color-mix(in srgb, var(--foreground) 7%, transparent) !important;
@@ -271,19 +211,10 @@
         -webkit-backdrop-filter: blur(7px);
     }
 
-
-    .app-workspace-shell.is-spatial .app-workspace-brand-mark {
-        border: 1px solid color-mix(in srgb, var(--workspace-accent) 36%, transparent);
-        background: var(--workspace-accent);
-        color: color-mix(in srgb, var(--workspace-canvas) 92%, black);
-        box-shadow: 0 8px 24px color-mix(in srgb, var(--workspace-accent) 18%, transparent);
-    }
-
     .brand-logo-frame[data-logo-frame-enabled="false"] > :is(img, svg) {
         width: 100%;
         height: 100%;
     }
-
 
     /* 工作区保留滚轮与触控板滚动，只隐藏会形成额外竖向分割的浏览器轨道。 */
     .app-spatial-workspace .app-workspace-scroll {
@@ -375,31 +306,6 @@
     @media (max-width: 639px) {
 
         /* 窄屏下侧栏常驻，收缩到图标主轨，避免遮挡主内容 */
-        .app-workspace-shell.is-spatial .app-workspace-sidebar.is-collapsed {
-            width: 0 !important;
-        }
-    }
-
-    @media (max-width: 1023px) {
-        .app-workspace-sidebar-scrim {
-            left: 0;
-        }
-
-        .app-workspace-shell .app-workspace-sidebar {
-            width: 0 !important;
-            border: 0 !important;
-            transition: width var(--motion-state) var(--ease-aceternity);
-        }
-
-        .app-workspace-shell .app-workspace-sidebar.is-mobile-expanded {
-            position: absolute;
-            z-index: 40;
-            inset: 6px auto 6px 6px;
-            width: min(264px, calc(100vw - 58px)) !important;
-            border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
-            border-radius: var(--r-xl);
-            box-shadow: 22px 0 70px rgba(0, 0, 0, 0.42), inset 0 1px 0 color-mix(in srgb, white 7%, transparent);
-        }
     }
 
     .app-user-workspace {
@@ -453,9 +359,6 @@
     }
 
     /* 画布编辑器和管理后台不继承用户端的圆角卡片外壳。 */
-    .app-user-workspace .app-workspace-sidebar {
-        background: var(--workspace-sidebar);
-    }
 
     .app-user-workspace .app-workspace-stage {
         background: var(--workspace-content);
@@ -472,41 +375,11 @@
         background: color-mix(in srgb, var(--foreground) 8%, transparent);
     }
 
-    .app-user-workspace .app-workspace-nav-link {
-        min-height: 40px;
-        border-radius: 14px;
-        padding-inline: 12px;
-        color: color-mix(in srgb, var(--foreground) 62%, transparent);
-        transition:
-            background-color var(--motion-instant) var(--ease-product-enter),
-            color var(--motion-instant) var(--ease-product-enter),
-            transform var(--motion-instant) var(--ease-product-enter);
-    }
-
-    .app-user-workspace .app-workspace-nav-link:hover:not(.is-active) {
-        background: color-mix(in srgb, var(--foreground) 5%, transparent);
-        color: var(--foreground);
-    }
-
-    .app-user-workspace .app-workspace-nav-link.is-disabled {
-        color: rgba(255,255,255,.3);
-        cursor: not-allowed;
-        pointer-events: none;
-    }
-    .app-user-workspace .app-workspace-nav-link.is-disabled .app-workspace-nav-icon,
-    .app-user-workspace .app-workspace-nav-link.is-disabled svg {
-        color: rgba(255,255,255,.25);
-    }
-
-    .app-user-workspace .app-workspace-nav-link:active,
-    .app-user-workspace .app-workspace-topbar-icon-button:active,
     .app-user-workspace .app-workspace-sidebar-search > button:active {
         transform: scale(0.985);
     }
 
-    .app-user-workspace .app-workspace-nav-link:focus-visible,
-    .app-user-workspace .app-workspace-sidebar-search > button:focus-visible,
-    .app-user-workspace .app-workspace-sidebar-rail-button:focus-visible {
+    .app-user-workspace .app-workspace-sidebar-search > button:focus-visible {
         outline: 2px solid color-mix(in srgb, var(--workspace-accent) 42%, transparent);
         outline-offset: 2px;
     }
@@ -529,93 +402,10 @@
     }
 
     /* 工作区外壳通过表面明度与间距分层，避免边框和内高光叠加造成线条感。 */
-    .app-workspace-sidebar,
     .app-workspace-stage {
         border: 0;
         border-radius: var(--r-xl);
         box-shadow: none;
-    }
-
-    .app-workspace-sidebar {
-        width: var(--workspace-sidebar-width, 208px);
-        background: color-mix(in srgb, var(--workspace-sidebar) 96%, var(--foreground) 4%);
-        transition: width var(--motion-state) var(--ease-aceternity);
-    }
-
-    .app-workspace-shell .app-workspace-sidebar.is-collapsed {
-        width: var(--workspace-sidebar-collapsed-width) !important;
-    }
-
-    .app-workspace-sidebar-nav {
-        width: var(--workspace-sidebar-nav-width);
-        transition: width var(--motion-state) var(--ease-aceternity);
-    }
-
-    .app-workspace-sidebar-nav.is-collapsed {
-        width: var(--workspace-sidebar-collapsed-width);
-    }
-
-    .app-workspace-sidebar-rail-header {
-        display: grid;
-        min-height: 56px;
-        padding: 10px;
-        place-items: center;
-    }
-
-    .app-workspace-sidebar-rail-button {
-        display: grid;
-        width: 36px;
-        height: 36px;
-        place-items: center;
-        border-radius: var(--r-sm);
-        color: color-mix(in srgb, var(--foreground) 66%, transparent);
-        transition: color var(--motion-instant) ease-out, background-color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-sidebar-rail-button:hover,
-    .app-workspace-sidebar-rail-button:focus-visible {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search {
-        padding: 0 10px 4px;
-    }
-
-    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search > button,
-    .app-workspace-nav-link.is-collapsed {
-        justify-content: center;
-        gap: 0;
-        padding-inline: 0;
-    }
-
-    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-label,
-    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-search-shortcut,
-    .app-workspace-nav-link.is-collapsed .app-workspace-nav-title,
-    .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta {
-        display: none;
-    }
-
-    .app-workspace-nav-link.is-collapsed .app-workspace-nav-main {
-        gap: 0;
-    }
-
-    .app-workspace-sidebar-scroll-area.is-collapsed {
-        gap: 6px;
-        padding: 4px 10px 8px;
-    }
-
-    .app-workspace-sidebar-nav.is-collapsed .app-workspace-sidebar-footer {
-        padding: 8px 10px 10px;
-    }
-
-
-    .app-workspace-sidebar .app-workspace-sidebar-scroll-area {
-        scrollbar-width: none;
-    }
-
-    .app-workspace-sidebar .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
-        display: none;
     }
 
     .app-workspace-stage,
@@ -623,7 +413,6 @@
     .app-workspace-grid {
         background: var(--workspace-content);
     }
-
 
     .app-workspace-page {
         background: var(--workspace-content);

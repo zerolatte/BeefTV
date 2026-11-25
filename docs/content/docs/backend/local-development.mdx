@@ -54,6 +54,16 @@ bun run dev
 
 Docker 热更新使用 `docker-compose.dev.yml`，启动前创建 `.local/platform-debug`、`.local/cache/go-build` 和 `.local/cache/go-mod`。源码镜像使用 `docker-compose.local.yml`；两者都使用独立平台存储。镜像包含预置模型协议与媒体工具，不包含助手宿主。
 
+已经初始化的本地 Compose 部署，可使用 Node.js 运行以下脚本更新：
+
+```powershell
+node scripts/deploy-local.mjs
+# 只构建和更新前端
+node scripts/deploy-local.mjs web
+```
+
+脚本默认使用项目名 `beeftv-platform`；已有部署使用其他项目名时，必须通过 `--project-name` 指定相同名称以继续使用原数据卷。脚本等待服务健康后，只清理带该 Compose 项目标签、无标签且未被任何容器使用的旧镜像。数据卷、其他项目镜像与构建缓存不清理；构建或启动失败时保留旧镜像。直接执行 `docker compose build` 不会自动清理旧镜像。
+
 ## 验证
 
 ```bash

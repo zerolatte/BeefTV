@@ -202,22 +202,16 @@
     color: var(--user-ink);
 }
 
-.dark .app-user-workspace .app-workspace-sidebar-notification,
-.dark .app-user-workspace .app-workspace-topbar-icon-button,
-.dark .app-user-workspace .app-workspace-sidebar-rail-button {
+.dark .app-user-workspace .app-workspace-sidebar-notification {
     color: rgba(255, 255, 255, 0.65) !important;
 }
 
-.dark .app-user-workspace .app-workspace-sidebar-notification:hover,
-.dark .app-user-workspace .app-workspace-topbar-icon-button:hover,
-.dark .app-user-workspace .app-workspace-sidebar-rail-button:hover {
+.dark .app-user-workspace .app-workspace-sidebar-notification:hover {
     background: rgba(255, 255, 255, 0.08) !important;
     color: #ffffff !important;
 }
 
-.dark .app-user-workspace .app-workspace-topbar-icon-button svg,
-.dark .app-user-workspace .app-workspace-sidebar-notification svg,
-.dark .app-user-workspace .app-workspace-sidebar-rail-button svg {
+.dark .app-user-workspace .app-workspace-sidebar-notification svg {
     color: currentColor !important;
 }
 
@@ -297,10 +291,6 @@
 .app-user-workspace .app-workspace-sidebar-profile-menu svg {
     width: 15px;
     height: 15px;
-}
-
-.app-user-workspace .app-workspace-mobile-menu {
-    display: none;
 }
 
 /* 首页：把视觉重心从装饰图改到标题、模式切换和真实 Composer。 */
@@ -499,16 +489,6 @@
 }
 
 @media (max-width: 1023px) {
-    .app-user-workspace .app-workspace-sidebar {
-        position: absolute;
-        inset: 0 auto 0 0;
-        z-index: 40;
-        visibility: hidden;
-        width: min(260px, calc(100vw - 48px)) !important;
-        transform: translateX(-100%);
-    }
-    .app-user-workspace .app-workspace-sidebar.is-mobile-expanded { visibility: visible; transform: translateX(0); }
-    .app-user-workspace .app-workspace-mobile-menu { display: grid; }
     .app-user-workspace .app-workspace-topbar { padding: 0 14px; }
     .app-user-workspace .app-workspace-topbar-breadcrumb { margin-left: 2px; }
     .app-user-workspace .creation-empty-workspace { width: min(100% - 28px, 820px); padding-top: 24px; }
@@ -521,15 +501,11 @@
     .app-user-workspace .creation-empty-suggest .creation-hero-prompt,
     .app-user-workspace .creation-empty-suggest .suggest-card { min-height: 58px; }
 }
-
-.dark .app-user-workspace .app-workspace-sidebar,
-.dark .app-user-workspace .app-workspace-sidebar-nav { background: #1b1b1d; }
 .dark .app-user-workspace .app-workspace-topbar,
 .dark .app-user-workspace .creation-home,
 .dark .app-user-workspace .creation-composer,
 .dark .app-user-workspace .creation-empty-suggest .creation-hero-prompt,
 .dark .app-user-workspace .creation-empty-suggest .suggest-card { background: #18181a; }
-.dark .app-user-workspace .app-workspace-sidebar-footer { border-top-color: rgba(255,255,255,.08); }
 .dark .app-user-workspace .app-workspace-topbar-credit-pill { border-color: rgba(255,255,255,.11); background: #202024; color: rgba(255,255,255,.72); }
 .dark .app-user-workspace .app-workspace-topbar-credit-pill strong { color: #fff; }
 .dark .app-user-workspace .app-workspace-sidebar-profile { color: #f5f5f5; }
@@ -544,22 +520,6 @@
 .dark .app-user-workspace .creation-home-heading p,
 .dark .app-user-workspace .app-workspace-topbar-breadcrumb > span:not(.truncate) {
     color: rgba(255, 255, 255, 0.28) !important;
-}
-
-.dark .app-user-workspace .app-workspace-sidebar-collapse-button {
-    color: rgba(255, 255, 255, 0.55) !important;
-    opacity: 0.85;
-}
-
-.dark .app-user-workspace .app-workspace-sidebar-collapse-button:hover,
-.dark .app-user-workspace .app-workspace-sidebar-collapse-button:focus-visible {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #ffffff !important;
-    opacity: 1;
-}
-
-.dark .app-user-workspace .app-workspace-sidebar-collapse-button svg {
-    color: currentColor !important;
 }
 .dark .app-user-workspace .app-workspace-topbar { border-bottom-color: rgba(255, 255, 255, .08); }
 .dark .app-user-workspace .creation-empty-workspace > .creation-mode-capsule { background: #232326; border-color: rgba(255,255,255,.08); }

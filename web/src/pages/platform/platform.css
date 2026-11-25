@@ -1,17 +1,275 @@
-.platform-login { min-height: 100dvh; display: grid; place-items: center; padding: 20px; background: var(--user-bg, Canvas); color: var(--user-ink, CanvasText); font: 14px/22px system-ui, sans-serif; }
-.platform-login-card { width: min(100%, 380px); display: flex; flex-direction: column; gap: 18px; }
-.platform-login-card h1 { font-size: 22px; margin: 0; }
-.platform-login-card h2 { font-size: 16px; font-weight: 500; margin: 0; }
-.platform-login-card p { margin: 0; }
-.platform-login-card label { display: grid; gap: 6px; font-size: 12px; font-weight: 500; }
-.platform-login-card input { font: inherit; padding: 10px 12px; border: 1px solid var(--user-border, GrayText); border-radius: var(--radius-md, 8px); background: var(--user-bg, Canvas); color: inherit; }
-.platform-login-card button { padding: 10px 12px; font: inherit; cursor: pointer; }
-.platform-login-card :focus-visible { outline: 2px solid Highlight; outline-offset: 3px; }
-.platform-error { color: var(--color-error, CanvasText); overflow-wrap: anywhere; }
+/* 登录页独立挂载：颜色、排版与控件均由根节点的局部变量负责。 */
+.platform-login {
+    --institute-blue: #0588ce;
+    --login-page: #f5f7fa;
+    --login-surface: #ffffff;
+    --login-brand-surface: #e9f2f8;
+    --login-ink: #152f43;
+    --login-muted: #506779;
+    --login-border: #d4e0e8;
+    --login-input-border: #9bafbd;
+    --login-action: #0077b5;
+    --login-action-hover: #00679e;
+    --login-action-foreground: #ffffff;
+    --login-focus: #0077b5;
+    --login-error: #b4233c;
+    --login-error-surface: #fff1f3;
+    --login-error-border: #e9b9c2;
+    --login-radius: 8px;
+    --login-frame-radius: 16px;
+    --login-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    box-sizing: border-box;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    display: flex;
+    flex-direction: column;
+    padding: 0 clamp(24px, 4.2vw, 72px);
+    background: var(--login-page);
+    color: var(--login-ink);
+    font: 400 14px/22px var(--login-font);
+    letter-spacing: 0;
+    color-scheme: light;
+}
+
+.platform-login[data-theme="dark"] {
+    --login-page: #0d1721;
+    --login-surface: #142330;
+    --login-brand-surface: #152f41;
+    --login-ink: #e8f2f8;
+    --login-muted: #a7bdcd;
+    --login-border: #2c4355;
+    --login-input-border: #607c90;
+    --login-action: #0077b5;
+    --login-action-hover: #00679e;
+    --login-focus: #70c8f5;
+    --login-error: #ffb2bd;
+    --login-error-surface: #3c2531;
+    --login-error-border: #875061;
+    color-scheme: dark;
+}
+
+.platform-login *, .platform-login *::before, .platform-login *::after { box-sizing: border-box; }
+.platform-login button, .platform-login input { font-family: inherit; letter-spacing: 0; }
+.platform-login button { cursor: pointer; }
+.platform-login button:disabled { cursor: wait; }
+.platform-login button:focus-visible { outline: 2px solid var(--login-focus); outline-offset: 4px; }
+.platform-login button svg, .platform-login .platform-login-error svg, .platform-login .platform-login-access-note svg { flex: none; }
+.platform-login .platform-login-masthead, .platform-login .platform-login-workspace, .platform-login .platform-login-footer { width: 100%; max-width: 1440px; margin-inline: auto; }
+
+.platform-login .platform-login-masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: none;
+    gap: 24px;
+    min-height: 120px;
+    padding-block: 20px;
+}
+.platform-login .platform-login-wordmark { display: block; width: 208px; height: auto; flex: none; }
+.platform-login .platform-login-header-actions { display: flex; align-items: center; gap: 24px; }
+.platform-login .platform-login-internal { display: inline-flex; align-items: center; gap: 8px; color: var(--login-muted); font-size: 12px; line-height: 18px; }
+.platform-login .platform-login-theme {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--login-border);
+    border-radius: var(--login-radius);
+    background: var(--login-surface);
+    color: var(--login-muted);
+}
+.platform-login .platform-login-theme:hover { color: var(--login-focus); border-color: var(--login-focus); }
+
+.platform-login .platform-login-workspace {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr);
+    flex: 1 0 auto;
+    min-height: 600px;
+    border: 1px solid var(--login-border);
+    border-radius: var(--login-frame-radius);
+    background: var(--login-surface);
+}
+.platform-login .platform-login-brand {
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: var(--login-frame-radius) 0 0 var(--login-frame-radius);
+    background: var(--login-brand-surface);
+}
+.platform-login .platform-login-brand-copy { padding: clamp(32px, 4.2vw, 64px); padding-bottom: 28px; }
+.platform-login .platform-login-product { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+.platform-login .platform-login-product > span { width: 6px; height: 20px; border-radius: 2px; background: var(--institute-blue); }
+.platform-login .platform-login-display { margin: 32px 0 20px; font-size: clamp(32px, 3.35vw, 52px); line-height: 1.45; font-weight: 500; }
+.platform-login .platform-login-tagline { margin: 0; color: var(--login-muted); line-height: 24px; }
+.platform-login .platform-login-landscape { position: relative; flex: 1; min-height: 240px; overflow: hidden; }
+.platform-login .platform-login-ridge {
+    position: absolute;
+    width: calc(100% + 2px);
+    height: auto;
+    right: -1px;
+    top: 0;
+    transform: translateY(-12%);
+    fill: var(--institute-blue);
+    pointer-events: none;
+}
+
+.platform-login .platform-login-panel { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 48px clamp(32px, 4.2vw, 64px); }
+.platform-login .platform-login-card { display: flex; flex-direction: column; gap: 24px; width: 100%; max-width: 360px; min-width: 0; }
+.platform-login .platform-login-heading-mark { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; color: var(--login-muted); font-size: 12px; line-height: 18px; }
+.platform-login .platform-login-heading-mark img { display: block; width: 40px; height: auto; }
+.platform-login .platform-login-heading h1 { margin: 0 0 10px; font-size: 16px; line-height: 24px; font-weight: 500; color: var(--login-ink); }
+.platform-login .platform-login-heading > p { margin: 0; color: var(--login-muted); font-size: 14px; line-height: 24px; }
+.platform-login fieldset { display: grid; gap: 20px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.platform-login .platform-login-field { display: grid; gap: 8px; min-width: 0; }
+.platform-login .platform-login-field label { color: var(--login-ink); font-size: 12px; line-height: 18px; font-weight: 500; }
+.platform-login input {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    height: 48px;
+    padding: 12px 14px;
+    border: 1px solid var(--login-input-border);
+    border-radius: var(--login-radius);
+    background: var(--login-surface);
+    color: var(--login-ink);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 400;
+}
+.platform-login input::placeholder { color: var(--login-muted); opacity: 1; }
+.platform-login input:hover:not(:disabled) { border-color: var(--login-focus); }
+.platform-login input:focus-visible { outline: 2px solid var(--login-focus); outline-offset: 2px; border-color: var(--login-focus); }
+.platform-login input[aria-invalid="true"] { border-color: var(--login-error); }
+.platform-login input:disabled { cursor: wait; }
+.platform-login .platform-login-password { position: relative; }
+.platform-login .platform-login-password input { padding-right: 48px; }
+.platform-login .platform-login-reveal {
+    position: absolute;
+    inset: 2px 2px 2px auto;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--login-radius);
+    background: transparent;
+    color: var(--login-muted);
+}
+.platform-login .platform-login-reveal:hover:not(:disabled) { color: var(--login-focus); }
+.platform-login .platform-login-hint { margin: 0; color: var(--login-muted); font-size: 12px; line-height: 18px; }
+.platform-login .platform-login-submit {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 1px solid transparent;
+    border-radius: var(--login-radius);
+    background: var(--login-action);
+    color: var(--login-action-foreground);
+    font-size: 13px;
+    line-height: 20px;
+    font-weight: 550;
+}
+.platform-login .platform-login-submit:hover:not(:disabled) { background: var(--login-action-hover); }
+.platform-login .platform-login-error { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid var(--login-error-border); border-radius: var(--login-radius); background: var(--login-error-surface); color: var(--login-error); }
+.platform-login .platform-login-error svg { margin-top: 2px; }
+.platform-login .platform-login-error p { margin: 0; min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 22px; }
+.platform-login .platform-login-error:focus-visible { outline: 2px solid var(--login-error); outline-offset: 3px; }
+.platform-login .platform-login-access-note { display: flex; align-items: flex-start; gap: 10px; padding-top: 20px; border-top: 1px solid var(--login-border); color: var(--login-muted); }
+.platform-login .platform-login-access-note svg { margin-top: 2px; }
+.platform-login .platform-login-access-note p { margin: 0; font-size: 12px; line-height: 20px; }
+.platform-login .platform-login-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; flex: none; padding-block: 22px; color: var(--login-muted); font-size: 12px; line-height: 18px; }
+.platform-login .platform-login-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+@media (max-width: 1000px) {
+    .platform-login .platform-login-workspace { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .platform-login .platform-login-brand-copy { padding: 32px; }
+    .platform-login .platform-login-panel { padding: 40px 28px; }
+    .platform-login .platform-login-ridge { width: 120%; }
+}
+
+@media (max-width: 760px) {
+    .platform-login { padding-inline: 20px; }
+    .platform-login .platform-login-masthead { min-height: 100px; gap: 16px; padding-block: 16px; }
+    .platform-login .platform-login-wordmark { width: 176px; }
+    .platform-login .platform-login-header-actions { gap: 12px; }
+    .platform-login .platform-login-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; min-height: 0; }
+    .platform-login .platform-login-brand { border-radius: var(--login-frame-radius) var(--login-frame-radius) 0 0; }
+    .platform-login .platform-login-brand-copy { padding: 24px 28px; }
+    .platform-login .platform-login-display, .platform-login .platform-login-tagline, .platform-login .platform-login-landscape { display: none; }
+    .platform-login .platform-login-panel { padding: 32px 28px; }
+    .platform-login .platform-login-card { max-width: 400px; }
+    .platform-login .platform-login-heading-mark { margin-bottom: 20px; }
+    .platform-login .platform-login-footer { justify-content: center; text-align: center; padding-block: 20px; }
+    .platform-login .platform-login-footer > span { width: 100%; }
+}
+
+@media (max-width: 420px) {
+    .platform-login .platform-login-header-actions { flex-direction: column-reverse; align-items: flex-end; gap: 8px; }
+    .platform-login .platform-login-internal { gap: 5px; }
+    .platform-login .platform-login-internal svg { display: none; }
+    .platform-login .platform-login-wordmark { width: 152px; }
+    .platform-login .platform-login-brand-copy { padding: 20px; }
+    .platform-login .platform-login-panel { padding: 28px 20px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .platform-login .platform-login-spinner { animation: platform-login-spin 1s linear infinite; }
+    .platform-login .platform-login-card { animation: platform-login-enter 350ms ease-out both; }
+}
+@keyframes platform-login-spin { to { transform: rotate(360deg); } }
+@keyframes platform-login-enter { from { opacity: 0; transform: translateY(6px); } }
+
 .platform-page { height: 100%; min-height: 0; display: flex; flex-direction: column; color: var(--user-ink); }
-.platform-page .platform-content { padding: 0 40px 24px; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 20px; }
-.platform-page .platform-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
-.platform-page .platform-amount { font-variant-numeric: tabular-nums; font-size: 16px; }
-.platform-page .platform-form { display: grid; gap: 14px; }
-.platform-page .platform-table { overflow-x: auto; }
-@media (max-width: 720px) { .platform-page .platform-content { padding-inline: 20px; } }
+.platform-page > .app-page-header { flex: none; min-height: 64px; padding: 16px 40px; gap: 12px; justify-content: space-between; }
+.platform-page .app-page-header-title { font-size: 16px; line-height: 22px; font-weight: 500; }
+.platform-page .platform-content { min-height: 0; flex: 1; overflow-y: auto; padding: 0 40px 32px; display: flex; flex-direction: column; gap: 24px; }
+.platform-page .platform-admin-content { overflow: hidden; padding-bottom: 0; gap: 0; }
+.platform-page .platform-tabs { flex: none; }
+.platform-page .platform-tabs .ant-tabs-nav { margin-bottom: 24px; }
+.platform-page .platform-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.platform-page .platform-panel-scroll { overflow-y: auto; min-height: 0; flex: 1; padding-bottom: 24px; display: flex; flex-direction: column; gap: 20px; }
+.platform-page .platform-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.platform-page .platform-toolbar-main { flex: 1; min-width: min(100%, 220px); }
+.platform-page .platform-toolbar .ant-select { min-width: 160px; max-width: 100%; }
+.platform-page .platform-row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.platform-page .platform-note { color: var(--user-ink-muted); font-size: 12px; line-height: 20px; margin: 0; }
+.platform-page .platform-table { flex: none; border: 1px solid var(--user-border); border-radius: var(--user-radius-control); background: var(--user-surface); overflow: hidden; }
+.platform-page .platform-table .ant-table { color: var(--user-ink); background: var(--user-surface); font-size: 13px; line-height: 22px; }
+.platform-page .platform-table .ant-table-thead > tr > th { background: var(--user-surface-muted); color: var(--user-ink-muted); font-size: 12px; font-weight: 500; padding: 13px 16px; border-color: var(--user-border); }
+.platform-page .platform-table .ant-table-tbody > tr > td { padding: 16px; border-color: var(--user-border); overflow-wrap: anywhere; }
+.platform-page .platform-table .ant-table-tbody > tr:last-child > td { border-bottom: 0; }
+.platform-page .platform-table .ant-table-placeholder { background: var(--user-surface); }
+.platform-page .platform-table [data-slot="status-badge"] { font-size: 12px; line-height: 18px; }
+.platform-page .platform-table [data-slot="status-badge"] > span:last-child { color: var(--user-ink-muted); }
+.platform-page .platform-empty { padding: 48px 16px; }
+.platform-page .platform-balance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.platform-page .platform-balance-card { padding: 24px; border: 1px solid var(--user-border); border-radius: var(--user-radius-card); background: var(--user-surface); }
+.platform-page .platform-balance-card p { margin: 0 0 16px; color: var(--user-ink-muted); font-size: 12px; line-height: 18px; }
+.platform-page .platform-balance-card strong { display: block; font-size: 32px; line-height: 40px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.platform-page .platform-section-title { margin: 4px 0 0; font-size: 16px; line-height: 24px; font-weight: 500; }
+.platform-page .platform-number { font-variant-numeric: tabular-nums; }
+.platform-page .platform-identifier { font-family: var(--font-mono); font-size: 12px; }
+.platform-dialog .ant-modal-header { padding: 20px 24px; margin: 0; border-bottom: 1px solid var(--user-border); }
+.platform-dialog .ant-modal-title { font-size: 16px; line-height: 22px; font-weight: 500; }
+.platform-dialog .ant-modal-footer { margin: 0; padding: 16px 24px; border-top: 1px solid var(--user-border); }
+.platform-dialog .platform-form { padding: 24px; }
+.platform-dialog .platform-form p { margin: 0 0 20px; color: var(--user-ink-muted); font-size: 12px; line-height: 20px; overflow-wrap: anywhere; }
+.platform-dialog .platform-form .ant-form-item-label > label { font-size: 12px; font-weight: 500; }
+.platform-dialog .platform-form .ant-input-number { width: 100%; }
+.platform-dialog .platform-form .platform-code { font: 400 12px/20px var(--font-mono); }
+.platform-dialog .platform-form-section { display: block; margin: 8px 0 20px; padding-top: 20px; border-top: 1px solid var(--user-border); font-size: 14px; font-weight: 500; }
+@media (max-width: 720px) {
+    .platform-page > .app-page-header { padding-inline: 20px; align-items: flex-start; }
+    .platform-page .platform-content { padding-inline: 20px; gap: 20px; }
+    .platform-page .platform-admin-content { gap: 0; }
+    .platform-page .platform-balance-grid { gap: 12px; }
+    .platform-page .platform-balance-card { padding: 16px; }
+    .platform-page .platform-balance-card strong { font-size: 28px; }
+}

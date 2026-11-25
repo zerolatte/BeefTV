@@ -169,7 +169,6 @@
     .app-user-workspace .app-workspace-topbar-breadcrumb > a,
     .app-user-workspace .app-workspace-topbar-breadcrumb > span[aria-hidden] { display: none; }
     .app-user-workspace .app-workspace-topbar-breadcrumb { min-width: 0; white-space: nowrap; }
-    .app-user-workspace .app-workspace-sidebar { width: 180px !important; }
     .app-user-workspace .creation-home > .creation-empty-workspace { width: calc(100% - 24px) !important; padding-top: 28px !important; padding-bottom: 40px !important; }
     .app-user-workspace .creation-home-heading h1 { font-size: 28px !important; }
     .app-user-workspace .creation-home-heading p { font-size: 14px !important; }
@@ -184,10 +183,9 @@
     .app-user-workspace .creation-featured-works { margin-top: 48px !important; }
 }
 @media (prefers-reduced-motion: reduce) {
-    .app-user-workspace .app-workspace-sidebar,
     .app-user-workspace .creation-empty-suggest .creation-hero-prompt,
-    .app-user-workspace .creation-empty-suggest .suggest-card,
-    .app-user-workspace .creation-featured-card { transition: none !important; }
+.app-user-workspace .creation-empty-suggest .suggest-card,
+.app-user-workspace .creation-featured-card { transition: none !important; }
     .app-user-workspace .creation-empty-suggest .creation-hero-prompt:hover,
     .app-user-workspace .creation-empty-suggest .suggest-card:hover,
     .app-user-workspace .creation-featured-card:hover { transform: none !important; }
@@ -357,7 +355,6 @@
 [data-libtv-readonly-dense="true"] .canvas-editor-shell { padding-top: 0; }
 [data-libtv-readonly-dense="true"] [data-canvas-frame-header] { top: -24px; }
 [data-libtv-readonly-dense="true"] [data-canvas-frame-count] { display: none; }
-[data-libtv-readonly-dense="true"] .canvas-libtv-readonly-bar ~ * { }
 [data-libtv-readonly-dense="true"] [data-canvas-viewport] { background-color: #151515 !important; }
 /* LibTV's read-only canvas keeps video thumbnails visually quiet at the
    captured 10% overview scale. Keep the interactive play affordance in the

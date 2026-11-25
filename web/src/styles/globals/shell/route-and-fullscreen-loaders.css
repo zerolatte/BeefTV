@@ -28,63 +28,14 @@
         -webkit-backdrop-filter: blur(22px) saturate(120%);
     }
 
-    .app-workspace-topbar-icon-button {
-        display: inline-flex;
-        width: 36px;
-        height: 36px;
-        flex: 0 0 auto;
-        align-items: center;
-        justify-content: center;
-        border-radius: var(--r-md);
-        color: color-mix(in srgb, var(--foreground) 58%, transparent);
-        transition: background-color var(--motion-instant) ease-out, color var(--motion-instant) ease-out;
-    }
-
-    .app-workspace-topbar-icon-button > svg,
-    .app-workspace-topbar-icon-button > span > svg {
-        width: 18px;
-        height: 18px;
-        stroke-width: 1.8;
-    }
-
     /* 账户触发按钮为身份标识，占位图标默认不弱化（与其他工具图标区分） */
     .app-workspace-account-trigger > span > svg {
         color: var(--foreground);
     }
 
-    .app-workspace-topbar-icon-button:hover {
-        background: var(--surface-hover);
-        color: var(--foreground);
-    }
-
-    .app-workspace-topbar-icon-button:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--workspace-accent) 46%, transparent);
-        outline-offset: -2px;
-    }
-
     /* 品牌字标：弱化但可读，hover 加深 */
-    .app-workspace-brand-wordmark {
-        color: color-mix(in srgb, var(--foreground) 78%, transparent);
-        letter-spacing: 0.01em;
-        transition: color var(--motion-instant) ease-out;
-    }
-    .app-workspace-nav-link {
-        position: relative;
-    }
 
     /* 侧栏激活项只保留底色高亮，不使用左侧竖条（用户决策：选中不画竖线）。 */
-    .app-workspace-nav-link.is-active {
-        background: var(--workspace-nav-active-bg);
-        color: var(--foreground);
-        box-shadow: none;
-    }
-
-
-    .app-workspace-nav-link.is-active:hover {
-        background: var(--workspace-nav-active-hover-bg);
-    }
-
-
 
     .app-workspace-icon-button {
         display: inline-flex;
@@ -104,72 +55,12 @@
     }
 
     /* Sidebar custom scrollbar - 隐身融入设计 */
-    .app-workspace-sidebar-scroll-area {
-        position: relative; /* 为渐变遮罩定位 */
-        overflow-y: auto;
-        scrollbar-width: thin;
-        scrollbar-color: transparent transparent; /* 默认完全隐藏 */
-        transition: scrollbar-color var(--motion-state) ease-in-out;
-    }
-
-    .app-workspace-sidebar-scroll-area::-webkit-scrollbar {
-        width: 4px;
-        background: transparent; /* 默认轨道透明 */
-    }
-
-    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-track {
-        background: transparent;
-    }
-
-    .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb {
-        background: transparent; /* 默认滑块透明 */
-        border-radius: 9999px;
-        transition: background-color var(--motion-state) ease-in-out;
-    }
 
     /* Hover state - 显示滚动条 */
-    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
-    .app-workspace-sidebar-scroll-area:hover {
-        scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-    }
-
-    .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
-    .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
-        background-color: rgba(255, 255, 255, 0.2);
-    }
 
     /* Dark mode scrollbar */
-    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area,
-    .dark .app-workspace-sidebar-scroll-area:hover {
-        scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
-    }
-
-    .dark .app-workspace-sidebar:hover .app-workspace-sidebar-scroll-area::-webkit-scrollbar-thumb,
-    .dark .app-workspace-sidebar-scroll-area:hover::-webkit-scrollbar-thumb {
-        background-color: rgba(255, 255, 255, 0.15);
-    }
 
     /* Scroll fade gradients - 光影提示设计 */
-    .app-workspace-sidebar-scroll-area.has-top-fade::before,
-    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
-        content: "";
-        position: absolute;
-        left: 0;
-        right: 0;
-        height: 12px;
-        pointer-events: none; /* 不阻塞点击事件 */
-        z-index: 10;
-    }
-
-    .app-workspace-sidebar-scroll-area.has-top-fade::before {
-        top: 0;
-        background: linear-gradient(to bottom, var(--workspace-sidebar), transparent);
-    }
-
-    .app-workspace-sidebar-scroll-area.has-bottom-fade::after {
-        bottom: 0;
-        background: linear-gradient(to top, var(--workspace-sidebar), transparent);
-    }
 
     .workspace-signal-icon {
         filter: drop-shadow(0 7px 16px color-mix(in srgb, var(--workspace-accent) 14%, transparent));

@@ -6,8 +6,15 @@
    a narrow admin column.  Light/dark only swap semantic tokens; geometry and
    interaction states remain identical.
    ======================================================================== */
+.app-product-workspace,
+.app-product-overlays,
+.platform-login {
+    --font-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    font-family: var(--font-sans);
+}
 .app-user-workspace,
-.app-user-overlays {
+.app-user-overlays,
+.platform-login {
     --user-page-bg: #f8f8fa;
     --user-surface: #ffffff;
     --user-surface-raised: #ffffff;
@@ -38,7 +45,8 @@
 }
 
 .dark .app-user-workspace,
-.dark .app-user-overlays {
+.dark .app-user-overlays,
+.dark .platform-login {
     --user-page-bg: #101010;
     --user-surface: #161616;
     --user-surface-raised: #1b1b1b;
@@ -63,42 +71,6 @@
 }
 
 /* Navigation rail: 20% wider than the previous 180 / 58 compact track. */
-.app-user-workspace .app-workspace-sidebar {
-    width: var(--workspace-reference-sidebar) !important;
-    flex-basis: var(--workspace-reference-sidebar) !important;
-    background: var(--user-page-bg) !important;
-    border-right: 0 !important;
-    transition: width var(--user-motion);
-}
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar,
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar-nav,
-.dark .app-user-workspace.app-product-workspace .app-workspace-sidebar-footer {
-    background: var(--user-surface) !important;
-}
-.app-user-workspace .app-workspace-sidebar.is-collapsed {
-    width: var(--workspace-reference-collapsed) !important;
-    flex-basis: var(--workspace-reference-collapsed) !important;
-}
-.app-user-workspace .app-workspace-sidebar-scroll-area { padding: 22px 12px 12px !important; gap: 24px !important; }
-.app-user-workspace .app-workspace-sidebar-footer { padding: 12px 12px 14px !important; border-top: 0 !important; }
-.app-user-workspace .app-workspace-nav-link {
-    min-height: 44px !important;
-    padding: 4px 10px !important;
-    border-radius: 13px !important;
-    color: var(--user-ink-muted) !important;
-    font-size: 13px !important;
-    font-weight: 560 !important;
-    transition: background var(--user-motion), color var(--user-motion), transform var(--user-motion);
-}
-.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main { gap: 10px !important; }
-.app-user-workspace .app-workspace-nav-link .app-workspace-nav-icon svg,
-.app-user-workspace .app-workspace-nav-link .app-workspace-nav-main > svg { width: 16px !important; height: 16px !important; }
-.app-user-workspace .app-workspace-nav-link.is-active { background: transparent !important; color: var(--user-ink) !important; font-weight: 680 !important; }
-.app-user-workspace .app-workspace-nav-link:hover:not(.is-active),
-.app-user-workspace .app-workspace-nav-link:focus-visible:not(.is-active) { background: var(--user-surface-hover) !important; color: var(--user-ink) !important; }
-.app-user-workspace .app-workspace-nav-group-toggle { color: var(--user-ink-soft) !important; }
-.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-sidebar-scroll-area { padding-inline: 8px !important; }
-.app-user-workspace .app-workspace-sidebar.is-collapsed .app-workspace-nav-link { width: 54px !important; }
 
 .app-user-workspace .app-workspace-topbar {
     min-height: 64px !important;

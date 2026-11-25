@@ -17,8 +17,6 @@ export function HomeDashboard({ projects, loading, error, onRetry }: { projects:
         <main className="beeftv-home" aria-label="BeefTV 首页">
             <section className="beeftv-home-hero" aria-label="新建画布">
                 <span className="beeftv-home-dot-base" aria-hidden />
-                <span className="beeftv-home-dot-flow" aria-hidden />
-                <span className="beeftv-home-dot-flow beeftv-home-dot-flow-delay" aria-hidden />
                 <button type="button" className="beeftv-home-create" onClick={() => navigate("/canvas?mode=new")}>
                     <span className="beeftv-home-create-icon"><Plus /></span>
                     <span className="beeftv-home-create-title">新建画布创作</span>
@@ -50,7 +48,7 @@ export function HomeDashboard({ projects, loading, error, onRetry }: { projects:
                         {loading ? Array.from({ length: 4 }, (_, index) => <div className="beeftv-recent-card is-loading" key={index} />) : projects.length ? projects.map((project) => {
                             return <Link to={`/canvas/${project.id}`} className="beeftv-recent-card" key={project.id}>
                                 <span className="beeftv-recent-preview"><ProjectPreview project={{ id: project.id, nodes: project.previewNodes }} emptyVariant="libtv" /></span>
-                                <span className="beeftv-recent-copy"><strong>{project.title || "未命名"}</strong><small>{formatDate(project.updatedAt)}</small></span>
+                                <span className="beeftv-recent-copy"><strong title={project.title || "未命名"}>{project.title || "未命名"}</strong><small>{formatDate(project.updatedAt)}</small></span>
                                 <ArrowRight className="beeftv-recent-arrow" />
                             </Link>;
                         }) : <button type="button" className="beeftv-recent-card is-empty" onClick={() => navigate("/canvas?mode=new")}><span className="beeftv-recent-preview"><Plus /></span><span className="beeftv-recent-copy"><strong>创建第一个画布</strong><small>让灵感有一个开始的地方</small></span></button>}

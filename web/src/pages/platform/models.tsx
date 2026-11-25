@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, App, Button, Form, Input, InputNumber, Select, Switch, Table } from "antd";
+import { Alert, App, Button, Dropdown, Form, Input, InputNumber, Select, Switch, Table } from "antd";
+import { MoreHorizontal, Plus, Boxes } from "lucide-react";
+import { EmptyState } from "@/components/ui/product/empty-state/empty-state";
+import { StatusBadge } from "@/components/ui/base/badges/status-badge";
+import { PlatformPanel } from "./platform-panel";
 import { AppModal } from "@/components/ui/product/app-modal/app-modal";
 import { PaginationBar } from "@/components/layout/workspace-page";
 import { usePlatformMutation } from "./use-platform-mutation";
@@ -51,22 +55,23 @@ export function ModelAdmin() {
     }
     const error = channels.error || models.error || prices.error;
     return <>
+        <PlatformPanel pagination={(channels.data?.total ?? 0) > 30 && <PaginationBar current={channelPage} pageSize={30} pageSizeOptions={[30]} total={channels.data?.total ?? 0} onChange={(page) => { setChannelPage(page); setChannelId(""); }} />}>
         <div className="platform-toolbar">
-            <Select aria-label="模型渠道" placeholder="选择渠道" value={channelId || undefined} onChange={setChannelId} options={channels.data?.channels.map((item) => ({ value: item.id, label: `${item.name}${item.enabled ? "" : "（停用）"}` }))} style={{ minWidth: 220 }} />
-            <Button type="primary" onClick={() => open({ kind: "channel" })}>新增渠道</Button>
-            {channel && <><Button onClick={() => open({ kind: "channel", channel })}>编辑渠道</Button><Button onClick={() => open({ kind: "model" })}>新增模型</Button><Button onClick={() => open({ kind: "import" })}>导入模型名称</Button></>}
+            <div className="platform-toolbar-main"><Select aria-label="模型渠道" placeholder="选择渠道" value={channelId || undefined} onChange={setChannelId} options={channels.data?.channels.map((item) => ({ value: item.id, label: `${item.name}${item.enabled ? "" : "（停用）"}` }))} style={{ width: 240, maxWidth: "100%" }} /></div>
+            <Button type={channel ? "default" : "primary"} icon={<Plus size={16} />} onClick={() => open({ kind: "channel" })}>新增渠道</Button>
+            {channel && <><Button type="primary" icon={<Plus size={16} />} onClick={() => open({ kind: "model" })}>新增模型</Button><Dropdown menu={{ items: [{ key: "edit", label: "编辑渠道", onClick: () => open({ kind: "channel", channel }) }, { key: "import", label: "导入模型名称", onClick: () => open({ kind: "import" }) }] }}><Button aria-label="渠道更多操作" icon={<MoreHorizontal size={16} />} /></Dropdown></>}
         </div>
-        {(channels.data?.total ?? 0) > 30 && <PaginationBar current={channelPage} pageSize={30} pageSizeOptions={[30]} total={channels.data?.total ?? 0} onChange={(page) => { setChannelPage(page); setChannelId(""); }} />}
         {error && <Alert type="error" title={error.message} />}
-        <p>渠道密钥仅保存在服务端。模型启用且对应规格的积分价格已发布后，用户才能生成。</p>
-        <Table rowKey="id" loading={models.isFetching} dataSource={models.data || []} pagination={false} scroll={{ x: 700 }} locale={{ emptyText: channelId ? "此渠道暂无模型" : "请先选择或创建渠道" }} columns={[
+        <p className="platform-note">渠道密钥仅保存在服务端。模型启用且对应规格的积分价格已发布后，用户才能生成。</p>
+        <Table className="platform-table" rowKey="id" loading={models.isFetching} dataSource={models.data || []} pagination={false} scroll={{ x: 700 }} locale={{ emptyText: <EmptyState className="platform-empty" icon={Boxes} title={error ? "模型配置读取失败" : channelId ? "此渠道暂无模型" : "选择一个模型渠道"} description={error ? "请重新加载模型配置" : channelId ? "添加模型并发布积分价格后，用户即可使用" : "选择已有渠道，或新增渠道连接模型服务"} /> }} columns={[
             { title: "模型", render: (_, row: PlatformModel) => row.displayName || row.modelKey }, { title: "能力", dataIndex: "capability", render: (value: string) => ({ text: "文本", image: "图片", video: "视频", audio: "音频" })[value] || value },
-            { title: "状态", dataIndex: "enabled", render: (value: boolean) => value ? "启用" : "停用" },
+            { title: "状态", dataIndex: "enabled", render: (value: boolean) => <StatusBadge tone={value ? "success" : "neutral"} label={value ? "启用" : "停用"} /> },
             { title: "发布价格", render: (_, row: PlatformModel) => prices.data?.filter((price) => price.modelId === row.id && price.published).map((price) => `${price.unitCredits} 积分`).join(" / ") || "未发布" },
-            { title: "操作", render: (_, row: PlatformModel) => <div className="platform-toolbar"><Button onClick={() => open({ kind: "model", model: row })}>编辑</Button><Button onClick={() => open({ kind: "price", model: row })}>价格与发布</Button></div> },
+            { title: "操作", render: (_, row: PlatformModel) => <div className="platform-row-actions"><Button onClick={() => open({ kind: "model", model: row })}>编辑</Button><Button onClick={() => open({ kind: "price", model: row })}>价格与发布</Button></div> },
         ]} />
-        <AppModal flush open={Boolean(editor)} title={editor?.kind === "channel" ? "模型渠道" : editor?.kind === "model" ? "模型能力" : editor?.kind === "price" ? "价格与发布" : "导入模型"} onCancel={() => { if (!busy) setEditor(undefined); }} onOk={() => void save()} confirmLoading={busy} destroyOnHidden>
-            <Form form={form} layout="vertical" className="p-6" preserve={false}>
+        </PlatformPanel>
+        <AppModal flush scrollBody className="platform-dialog" width={editor?.kind === "model" ? 640 : 480} open={Boolean(editor)} title={editor?.kind === "channel" ? "模型渠道" : editor?.kind === "model" ? "模型能力" : editor?.kind === "price" ? "价格与发布" : "导入模型"} onCancel={() => { if (!busy) setEditor(undefined); }} onOk={() => void save()} confirmLoading={busy} destroyOnHidden>
+            <Form form={form} layout="vertical" className="platform-form" preserve={false}>
                 {editor?.kind === "channel" && <>
                     <Form.Item name="name" label="渠道名称" rules={[{ required: true, max: 80 }]}><Input /></Form.Item>
                     <Form.Item name="baseUrl" label="模型服务地址" rules={[{ required: true, type: "url" }]}><Input placeholder="https://…" /></Form.Item>
@@ -79,8 +84,9 @@ export function ModelAdmin() {
                     <Form.Item name="providerModelKey" label="上游模型标识"><Input /></Form.Item>
                     <Form.Item name="capability" label="能力" rules={[{ required: true }]}><Select options={[{ value: "text", label: "文本" }, { value: "image", label: "图片" }, { value: "video", label: "视频" }, { value: "audio", label: "音频" }]} /></Form.Item>
                     <Form.Item name="protocol" label="请求协议标识" rules={[{ required: true }]}><Input /></Form.Item>
-                    <Form.Item name="capabilityJSON" label="能力与规格配置（JSON）" rules={[{ required: true }]}><Input.TextArea autoSize={{ minRows: 6, maxRows: 14 }} /></Form.Item>
-                    <Form.Item name="variantsJSON" label="规格映射（JSON 数组）" help="每项包含 selector、providerModelKey 和 enabled；无规格时填 []。" rules={[{ required: true }]}><Input.TextArea autoSize={{ minRows: 4, maxRows: 12 }} /></Form.Item>
+                    <h3 className="platform-form-section">能力与规格</h3>
+                    <Form.Item name="capabilityJSON" label="能力与规格配置（JSON）" rules={[{ required: true }]}><Input.TextArea className="platform-code" autoSize={{ minRows: 6, maxRows: 14 }} /></Form.Item>
+                    <Form.Item name="variantsJSON" label="规格映射（JSON 数组）" help="每项包含 selector、providerModelKey 和 enabled；无规格时填 []。" rules={[{ required: true }]}><Input.TextArea className="platform-code" autoSize={{ minRows: 4, maxRows: 12 }} /></Form.Item>
                     <Form.Item name="enabled" label="启用模型" valuePropName="checked"><Switch /></Form.Item>
                 </>}
                 {editor?.kind === "price" && <>

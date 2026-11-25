@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Home, Plug, Plus, Settings2, HardDrive, Sun, Moon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Home, Plug, Plus, Settings2, HardDrive, Sun, Moon, Coins, ShieldCheck } from "lucide-react";
 import { LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSProperties } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
@@ -51,8 +51,8 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
         { id: "home", title: "首页", icon: Home, to: "/" },
         { ...toolItem("canvas", "/project"), title: "项目" },
         { ...toolItem("assets", "/assets"), title: "资产" },
-        { id: "credits", title: "我的积分", icon: Settings2, to: "/credits" },
-        ...(useUserStore.getState().user?.role === "admin" ? [{ id: "admin", title: "平台管理", icon: Settings2, to: "/admin" }] : []),
+        { id: "credits", title: "我的积分", icon: Coins, to: "/credits" },
+        ...(useUserStore.getState().user?.role === "admin" ? [{ id: "admin", title: "平台管理", icon: ShieldCheck, to: "/admin" }] : []),
     ] }], footer: [] };
     const groups: WorkspaceNavGroup[] = [
         {
@@ -199,6 +199,7 @@ function NavItem({
                     data-nav-id={item.id}
                     style={rowStyle}
                     aria-label={collapsed ? item.title : undefined}
+                    aria-current={isActive ? "page" : undefined}
                     title={collapsed ? item.title : undefined}
                     onClick={handleClick}
                     onFocus={() => preloadWorkspaceRoute(linkTo)}
