@@ -30,6 +30,7 @@ import { isLocalWorkspaceMode, isPlatformWorkspaceMode } from "@/services/worksp
 import "@/styles/workspace-product.css";
 
 const workspaceTheme = getWorkspaceAntThemeConfig();
+const instituteWorkspaceTheme = getWorkspaceAntThemeConfig("institute");
 
 export default function UserLayout({ children }: { children: ReactNode }) {
     const { pathname } = useLocation();
@@ -48,6 +49,7 @@ export default function UserLayout({ children }: { children: ReactNode }) {
     }, [dismissWorkspaceNotice, workspaceNotices]);
     const spatialWorkbench = isSpatialWorkbenchPath(pathname);
     const productWorkspace = !/^\/canvas\/[^/]+(?:\/|$)/.test(pathname);
+    const instituteWorkspace = productWorkspace && isPlatformWorkspaceMode();
     useWorkspaceButtonFeedback(productWorkspace);
 
     useLayoutEffect(() => {
@@ -148,16 +150,18 @@ export default function UserLayout({ children }: { children: ReactNode }) {
         document.body.classList.add("app-user-overlays");
         document.body.classList.toggle("app-spatial-overlays", spatialWorkbench);
         document.body.classList.toggle("app-product-overlays", productWorkspace);
+        document.body.classList.toggle("app-institute-overlays", instituteWorkspace);
         return () => {
             document.body.classList.remove("app-user-overlays");
             document.body.classList.remove("app-spatial-overlays");
             document.body.classList.remove("app-product-overlays");
+            document.body.classList.remove("app-institute-overlays");
         };
-    }, [spatialWorkbench, productWorkspace]);
+    }, [spatialWorkbench, productWorkspace, instituteWorkspace]);
 
     return (
-        <ConfigProvider theme={productWorkspace ? workspaceTheme : undefined}>
-            <div className={cn("app-user-workspace h-dvh overflow-hidden text-foreground", spatialWorkbench && "app-spatial-workspace", productWorkspace && "app-product-workspace", pathname === "/" && "app-home-route")}>
+        <ConfigProvider theme={productWorkspace ? instituteWorkspace ? instituteWorkspaceTheme : workspaceTheme : undefined}>
+            <div className={cn("app-user-workspace h-dvh overflow-hidden text-foreground", spatialWorkbench && "app-spatial-workspace", productWorkspace && "app-product-workspace", instituteWorkspace && "app-institute-workspace", pathname === "/" && "app-home-route")}>
                 <AppWorkspaceShell>{children}</AppWorkspaceShell>
                 {!isPlatformWorkspaceMode() && <FirstCreationGuide />}
                 <WorkspaceOperationProgress />

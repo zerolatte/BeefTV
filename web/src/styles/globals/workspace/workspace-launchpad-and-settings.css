@@ -64,6 +64,33 @@
     --user-shadow-hover: none;
 }
 
+/* 研究院品牌只属于平台工作区和它的浮层，不向画布编辑器继承。 */
+.app-product-workspace.app-institute-workspace,
+.app-product-overlays.app-institute-overlays {
+    --user-action-bg: #0077b5;
+    --user-action-bg-hover: #00679e;
+    --user-action-bg-active: #005986;
+    --user-action-foreground: #ffffff;
+    --user-accent: #0077b5;
+    --user-selected-bg: #e6f3fa;
+    --user-selected-ink: #00679e;
+    --user-accent-soft: var(--user-selected-bg);
+    --control-selected-bg: var(--user-selected-bg);
+    --control-selected-hover-bg: color-mix(in srgb, var(--user-selected-bg) 90%, var(--user-selected-ink));
+    --control-selected-fg: var(--user-selected-ink);
+    --user-focus: #0077b5;
+    --control-focus-ring: var(--user-focus);
+    --workspace-brand-header-height: 124px;
+}
+
+.dark .app-product-workspace.app-institute-workspace,
+.dark .app-product-overlays.app-institute-overlays {
+    --user-accent: #70c8f5;
+    --user-selected-bg: #123447;
+    --user-selected-ink: #9ad8fa;
+    --user-focus: #70c8f5;
+}
+
 .app-user-workspace .app-workspace-stage,
 .app-user-workspace .app-user-content,
 .app-user-workspace .app-workspace-grid {

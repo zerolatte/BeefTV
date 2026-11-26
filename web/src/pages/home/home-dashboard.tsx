@@ -4,6 +4,7 @@ import { isEmbeddedRuntime } from "@/lib/embedded-runtime";
 import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import type { CanvasLibrarySummary } from "@/services/api/workspace-data";
 import { ProjectPreview } from "@/components/canvas/canvas-project-card";
+import { instituteBrand } from "@/components/brand/institute-brand";
 import { beefTVCapabilityItems } from "./home-data";
 function formatDate(value: string) {
     const date = new Date(value);
@@ -13,8 +14,10 @@ function formatDate(value: string) {
 
 export function HomeDashboard({ projects, loading, error, onRetry }: { projects: CanvasLibrarySummary[]; loading: boolean; error: boolean; onRetry: () => void }) {
     const navigate = useNavigate();
+    const institute = isPlatformWorkspaceMode();
     return (
-        <main className="beeftv-home" aria-label="BeefTV 首页">
+        <main className="beeftv-home" aria-label={institute ? `${instituteBrand.name}首页` : "BeefTV 首页"}>
+            {institute && <p className="beeftv-home-identity">{instituteBrand.name} · {instituteBrand.workbench}</p>}
             <section className="beeftv-home-hero" aria-label="新建画布">
                 <span className="beeftv-home-dot-base" aria-hidden />
                 <button type="button" className="beeftv-home-create" onClick={() => navigate("/canvas?mode=new")}>

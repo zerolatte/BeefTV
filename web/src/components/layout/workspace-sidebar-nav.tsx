@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentType, type CSSPrope
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { BrandLogoFrame } from "@/components/brand/brand-logo";
+import { instituteBrand } from "@/components/brand/institute-brand";
 import { WorkspaceSidebarUpdate } from "@/components/layout/workspace-sidebar-update";
 import { WorkspaceSidebarAccount } from "@/components/layout/workspace-sidebar-account";
 import { WorkspaceSidebarSocialLinks } from "@/components/layout/workspace-sidebar-social-links";
@@ -81,10 +82,14 @@ function buildNav(features: FeatureAvailability): { groups: WorkspaceNavGroup[];
 
 function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onExpand: () => void; onCollapse: () => void }) {
     const appearance = useAppearanceStore((state) => state.appearance);
+    const institute = isPlatformWorkspaceMode();
 
     if (collapsed) {
         return (
             <div className="app-workspace-sidebar-rail-header shrink-0">
+                {institute && <Link to="/" onClick={onNavigate} className="app-workspace-institute-icon" aria-label={`${instituteBrand.name}首页`} title={instituteBrand.name}>
+                    <img src={instituteBrand.icon} alt="" width={254} height={252} />
+                </Link>}
                 <button type="button" className="app-workspace-sidebar-rail-button" aria-label="展开侧栏菜单" title="展开侧栏菜单" onClick={onExpand}>
                     <ChevronRight className="size-4" strokeWidth={1.7} />
                 </button>
@@ -94,13 +99,16 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
 
     return (
         <div className="app-workspace-sidebar-brand-row relative shrink-0 px-3 pt-3">
-            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${appearance.brandName}首页`}>
-                <span className="flex min-w-0 items-center gap-2">
+            <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${institute ? instituteBrand.name : appearance.brandName}首页`}>
+                {institute ? <span className="app-workspace-institute-brand">
+                    <img src={instituteBrand.wordmark} alt={`${instituteBrand.name} / ${instituteBrand.latinName}`} width={432} height={168} />
+                    <span>{instituteBrand.workbench}</span>
+                </span> : <span className="flex min-w-0 items-center gap-2">
                     <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<span className="app-workspace-brand-placeholder" aria-hidden>B</span>} />
                     <span className="flex min-w-0">
                         <span className="app-workspace-brand-wordmark truncate text-[var(--fs-body)] leading-none font-semibold">{appearance.brandName}</span>
                     </span>
-                </span>
+                </span>}
             </Link>
             <button type="button" className="app-workspace-sidebar-collapse-button" aria-label="收起侧栏" title="收起侧栏" onClick={onCollapse}>
                 <ChevronLeft className="size-4" strokeWidth={1.7} />

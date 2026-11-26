@@ -71,14 +71,18 @@
 
 .collection-header .assets-kind-tab.is-active {
     border: 0;
-    background: color-mix(in srgb, var(--foreground) 9%, transparent);
-    color: var(--foreground);
+    background: var(--user-selected-bg, color-mix(in srgb, var(--foreground) 9%, transparent));
+    color: var(--user-selected-ink, var(--foreground));
     font-weight: 400;
 }
 
 .collection-header .assets-kind-tab span {
     min-width: 16px;
     font-size: 12px;
+}
+
+.collection-header .assets-kind-tab.is-active span {
+    color: var(--user-selected-ink, color-mix(in srgb, currentColor 58%, transparent));
 }
 
 .collection-header .assets-kind-tab:focus-visible {

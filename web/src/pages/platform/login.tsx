@@ -4,13 +4,10 @@ import { AlertCircle, ArrowRight, Eye, EyeOff, LoaderCircle, LockKeyhole, Moon, 
 import { changePlatformPassword, platformLogin } from "@/services/api/platform";
 import { useThemeStore, watchSystemTheme } from "@/stores/use-theme-store";
 import { INSTITUTE_RIDGE_PATH, INSTITUTE_RIDGE_VIEW_BOX } from "./institute-ridge";
-import instituteWordmark from "./assets/institute-wordmark.png";
-import instituteIcon from "./assets/institute-icon.jpg";
+import { instituteBrand } from "@/components/brand/institute-brand";
 import "./platform.css";
 
-const INSTITUTE_NAME = "长钢研究院";
-const INSTITUTE_NAME_LATIN = "Changgang Research Institute";
-const WORKBENCH_NAME = "影视创作工作台";
+const { name: INSTITUTE_NAME, latinName: INSTITUTE_NAME_LATIN, workbench: WORKBENCH_NAME, wordmark: instituteWordmark, icon: instituteIcon } = instituteBrand;
 
 /** 密码输入复用同一套可见切换、标签和错误关联。 */
 function PasswordField({ name, label, placeholder, newPassword = false, invalid = false, hint }: {

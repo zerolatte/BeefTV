@@ -16,7 +16,7 @@
 }
 .app-product-workspace .app-workspace-sidebar-nav { width: 100%; min-height: 0; }
 .app-product-workspace .app-workspace-sidebar-brand-row {
-    display: flex; align-items: center; min-height: 80px; gap: 8px; padding: 16px;
+    display: flex; align-items: center; min-height: var(--workspace-brand-header-height, 80px); gap: 8px; padding: 16px;
 }
 .app-product-workspace .app-workspace-sidebar-brand-button {
     display: flex; align-items: center; min-width: 0; flex: 1; min-height: 36px; color: var(--user-ink);
@@ -29,6 +29,11 @@
     font-size: 18px; font-weight: 650; line-height: 24px; letter-spacing: -.5px; color: var(--user-ink);
 }
 .app-product-workspace .app-workspace-brand-placeholder { color: var(--user-ink); font-size: 18px; }
+.app-product-workspace .app-workspace-institute-brand { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; width: 100%; }
+.app-product-workspace .app-workspace-institute-brand img { display: block; width: 100%; height: auto; }
+.app-product-workspace .app-workspace-institute-brand > span { color: var(--user-ink-muted); font-size: 12px; line-height: 18px; font-weight: 400; }
+.app-product-workspace .app-workspace-institute-icon { display: grid; place-items: center; width: 40px; height: 40px; }
+.app-product-workspace .app-workspace-institute-icon img { display: block; width: 32px; height: auto; }
 .app-product-workspace :is(.app-workspace-sidebar-collapse-button, .app-workspace-sidebar-rail-button) {
     display: grid; place-items: center; flex: none; width: 32px; height: 32px;
     border-radius: var(--user-radius-control); color: var(--user-ink-muted); cursor: pointer;
@@ -36,7 +41,7 @@
 .app-product-workspace :is(.app-workspace-sidebar-collapse-button, .app-workspace-sidebar-rail-button):hover {
     background: var(--user-surface-hover); color: var(--user-ink);
 }
-.app-product-workspace .app-workspace-sidebar-rail-header { display: grid; place-items: center; min-height: 80px; }
+.app-product-workspace .app-workspace-sidebar-rail-header { display: grid; align-content: center; justify-items: center; gap: 8px; min-height: var(--workspace-brand-header-height, 80px); }
 .app-product-workspace .app-workspace-sidebar-scroll-area { gap: 20px; padding: 0 14px 16px; scrollbar-width: thin; }
 .app-product-workspace .app-workspace-nav-group { gap: 8px; }
 .app-product-workspace .app-workspace-nav-link {
@@ -45,9 +50,9 @@
     transition: color var(--user-motion);
 }
 .app-product-workspace .app-workspace-nav-link:hover { background: var(--user-surface-hover); color: var(--user-ink); }
-.app-product-workspace .app-workspace-nav-link.is-active { color: var(--user-ink); }
+.app-product-workspace .app-workspace-nav-link.is-active { color: var(--user-selected-ink, var(--user-ink)); }
 .app-product-workspace .app-workspace-nav-active-pill {
-    position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--user-surface-muted);
+    position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: var(--user-selected-bg, var(--user-surface-muted));
 }
 .app-product-workspace .app-workspace-nav-link[data-nav-id="new"] {
     margin-bottom: 12px; background: var(--user-action-bg); color: var(--user-action-foreground); font-weight: 550;
@@ -69,7 +74,7 @@
 .app-product-workspace .app-workspace-nav-link.is-collapsed .app-workspace-nav-meta { display: none; }
 .app-product-workspace .app-workspace-floating-menu { display: none; }
 .app-product-workspace :is(.app-workspace-sidebar a, .app-workspace-sidebar button, .app-workspace-floating-menu):focus-visible {
-    outline: 2px solid var(--user-ink); outline-offset: 3px;
+    outline: 2px solid var(--user-focus, var(--user-ink)); outline-offset: 3px;
 }
 @media (max-width: 1023px) {
     .app-product-workspace .app-workspace-sidebar {
@@ -95,7 +100,6 @@
 .app-user-workspace.app-product-workspace {
     --workspace-reference-topbar: 89px;
     --workspace-reference-page-bg: var(--user-page-bg);
-    --user-accent: #57575b;
     background: var(--user-page-bg);
     color-scheme: inherit;
 }
@@ -146,7 +150,6 @@
     .app-user-workspace.app-product-workspace .app-workspace-topbar-utility { width:42px;padding:0;justify-content:center; }
 }
 
-.dark .app-user-workspace.app-product-workspace { --user-accent: #c1c1c5; }
 /* ========================================================================
    Product interaction contract
    ------------------------------------------------------------------------
@@ -161,7 +164,7 @@
     --product-state: 180ms;
     --product-enter: 360ms;
     --product-content-max: 1480px;
-    --product-focus-ring: color-mix(in srgb, var(--user-accent) 22%, transparent);
+    --product-focus-ring: var(--user-focus, color-mix(in srgb, var(--user-accent) 22%, transparent));
     --product-accent-blue: #4167bf;
     --product-accent-green: #287f65;
     --product-accent-orange: #a46524;

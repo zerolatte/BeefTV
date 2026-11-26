@@ -21,6 +21,8 @@
 .collection-toolbar-controls > .ant-input-affix-wrapper { width: 280px; max-width: 100%; }
 .collection-content { min-width: 0; }
 .collection-selection-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); border-radius: var(--user-radius-control); padding: var(--space-3) var(--space-4); background: var(--user-accent-soft); font-size: var(--fs-caption); }
+.app-institute-workspace .app-pagination-btn.is-active { background: var(--user-selected-bg); color: var(--user-selected-ink); }
+.app-institute-workspace .app-pagination-btn:focus-visible { outline: 2px solid var(--user-focus); outline-offset: 2px; }
 
 .app-user-workspace .canvas-collection-grid {
     display: grid;
@@ -341,7 +343,7 @@
     cursor: pointer;
 }
 .assets-library-source-rail-item:hover { background: var(--user-surface-hover); }
-.assets-library-source-rail-item.is-active { background: var(--user-border); }
+.assets-library-source-rail-item.is-active { background: var(--user-selected-bg, var(--user-border)); color: var(--user-selected-ink, var(--user-ink-muted)); }
 .assets-library-source-rail-item.is-disabled { color: var(--user-ink-soft); cursor: not-allowed; }
 .assets-library-source-rail-icon { display: grid; place-items: center; color: var(--user-ink-muted); }
 .assets-library-source-rail-item.is-disabled .assets-library-source-rail-icon { color: var(--user-ink-soft); }
@@ -374,6 +376,7 @@
 .assets-header-compact-button.is-active { background: var(--user-surface-muted); color: var(--user-ink); }
 .assets-header-action-buttons { height: 36px; transform: translateY(0); }
 .workspace-expandable-search { flex: 0 0 auto; }
+.app-institute-workspace .workspace-expandable-search:focus-within { outline: 2px solid var(--user-focus); outline-offset: 2px; border-radius: var(--user-radius-control); }
 .workspace-expandable-search-button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--user-ink-muted); cursor: pointer; }
 .workspace-expandable-search-button:hover,
 .workspace-expandable-search-button.is-active { background: var(--user-surface-muted); color: var(--user-ink); }

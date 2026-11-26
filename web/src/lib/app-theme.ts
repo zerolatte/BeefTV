@@ -386,7 +386,9 @@ export function getAntThemeConfig(dark: boolean, skinID: unknown = "classic"): T
  * 管理后台使用更高密度的控件节奏；只在 AdminShell 内挂载，避免改变创作端的视觉契约。
  */
 /** 用户端与后台共享业务控件，但使用独立的产品尺寸和柔和表面。 */
-export function getWorkspaceAntThemeConfig(): ThemeConfig {
+export function getWorkspaceAntThemeConfig(brand?: "institute"): ThemeConfig {
+    const institute = brand === "institute";
+    const fieldFocus = institute ? { activeBorderColor: "var(--user-focus)", hoverBorderColor: "var(--user-focus)" } : {};
     return {
         token: {
             borderRadius: workspaceControlMetrics.radius.normal, borderRadiusLG: workspaceControlMetrics.radius.card, borderRadiusSM: workspaceControlMetrics.radius.small,
@@ -406,8 +408,12 @@ export function getWorkspaceAntThemeConfig(): ThemeConfig {
                 defaultShadow: "none", primaryShadow: "none", dangerShadow: "none",
                 paddingInline: workspaceControlMetrics.buttonPadding.normal, paddingInlineSM: workspaceControlMetrics.buttonPadding.small,
             },
-            Input: { borderRadius: workspaceControlMetrics.radius.normal, activeShadow: "0 0 0 2px var(--user-accent-soft)", paddingInline: workspaceControlMetrics.inputPadding },
-            Select: { borderRadius: workspaceControlMetrics.radius.normal, optionSelectedBg: "var(--user-accent-soft)", optionSelectedColor: "var(--user-ink)", optionActiveBg: "var(--user-surface-muted)", optionPadding: "9px 12px" },
+            Input: { borderRadius: workspaceControlMetrics.radius.normal, activeShadow: "0 0 0 2px var(--user-accent-soft)", paddingInline: workspaceControlMetrics.inputPadding, ...fieldFocus },
+            Select: { borderRadius: workspaceControlMetrics.radius.normal, optionSelectedBg: "var(--user-accent-soft)", optionSelectedColor: institute ? "var(--user-selected-ink)" : "var(--user-ink)", optionActiveBg: "var(--user-surface-muted)", optionPadding: "9px 12px", ...fieldFocus },
+            ...(institute ? {
+                InputNumber: fieldFocus,
+                Tabs: { itemSelectedColor: "var(--user-selected-ink)", itemHoverColor: "var(--user-selected-ink)", itemActiveColor: "var(--user-selected-ink)", inkBarColor: "var(--user-focus)" },
+            } : {}),
             Dropdown: { borderRadiusLG: workspaceControlMetrics.overlayRadius.dropdown, controlItemBgHover: "var(--user-surface-muted)", paddingBlock: 6 },
             Modal: { borderRadiusLG: workspaceControlMetrics.overlayRadius.modal },
             Popconfirm: { borderRadiusLG: workspaceControlMetrics.overlayRadius.popconfirm },

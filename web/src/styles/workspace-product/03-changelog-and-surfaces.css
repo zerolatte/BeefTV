@@ -151,12 +151,12 @@
 @layer utilities {
     .assets-folder-create-confirm,
     .assets-batch-upload-confirm {
-        background: var(--btn-solid-bg) !important;
-        color: var(--btn-solid-fg) !important;
+        background: var(--user-action-bg, var(--btn-solid-bg)) !important;
+        color: var(--user-action-foreground, var(--btn-solid-fg)) !important;
     }
     .assets-folder-create-confirm:not(:disabled):hover,
     .assets-batch-upload-confirm:not(:disabled):hover {
-        background: var(--btn-solid-hover-bg) !important;
+        background: var(--user-action-bg-hover, var(--btn-solid-hover-bg)) !important;
     }
 }
 

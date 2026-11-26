@@ -7,6 +7,7 @@
     position: relative; display: grid; place-items: center; min-height: 208px; overflow: hidden;
     border: 1px solid var(--user-border); border-radius: var(--user-radius-card); background: var(--user-surface);
 }
+.beeftv-home .beeftv-home-identity { margin: 0 0 20px; color: var(--user-ink-muted); font-size: 14px; line-height: 22px; }
 .beeftv-home .beeftv-home-dot-base {
     position: absolute; inset: 0; pointer-events: none; background-size: 20px 20px;
     background-image: radial-gradient(circle, var(--user-border-strong) .7px, transparent .8px);
@@ -65,7 +66,7 @@
     border: 1px solid var(--user-border); border-radius: var(--user-radius-control); color: var(--user-ink-muted); cursor: pointer;
 }
 .beeftv-home .beeftv-home-error svg { width: 18px; }
-.beeftv-home :is(a, button):focus-visible { outline: 2px solid var(--user-ink); outline-offset: 4px; }
+.beeftv-home :is(a, button):focus-visible { outline: 2px solid var(--user-focus, var(--user-ink)); outline-offset: 4px; }
 @media (max-width: 720px) {
     .beeftv-home { padding: 16px 20px 32px; }
     .beeftv-home .beeftv-home-hero { min-height: 176px; }
