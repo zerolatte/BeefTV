@@ -4,10 +4,11 @@
         <meta charset="UTF-8" />
         <base href="/" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="description" content="AI 影视与短剧创作工作台" />
-        <link rel="icon" href="/beef-logo.png" type="image/png" />
+        <meta name="description" content="长钢研究院影视创作工作台，面向 AI 影视与短剧创作，集项目管理、智能生成与资产管理于一体。" />
+        <link rel="icon" href="/src/components/brand/assets/institute-icon.jpg" type="image/jpeg" />
+        <link rel="preload" href="/src/components/brand/assets/institute-wordmark.png" as="image" />
         <link rel="stylesheet" href="/src/styles/globals.css" />
-        <title>正在加载</title>
+        <title>长钢研究院 · 影视创作工作台</title>
         <style>
             html,
             body {
@@ -26,24 +27,19 @@
                 position: absolute;
                 left: 50%;
                 top: 50%;
-                width: min(240px, 42vw);
-                aspect-ratio: 17 / 10;
+                width: min(240px, 60vw);
+                aspect-ratio: 18 / 7;
                 transform: translate(-50%, -50%);
-                background: var(--bootstrap-ink);
-                background-size: 240% 100%;
-                background-position: 100% 0;
-                -webkit-mask: url('/beef-logo.png') center / contain no-repeat;
-                mask: url('/beef-logo.png') center / contain no-repeat;
-                animation: appearance-bootstrap-shimmer 2.6s ease-in-out infinite;
+                background: url('/src/components/brand/assets/institute-wordmark.png') center / contain no-repeat;
+                animation: appearance-bootstrap-pulse 2.6s ease-in-out infinite;
             }
-            @keyframes appearance-bootstrap-shimmer {
-                0%, 12% { background-position: 100% 0; }
-                82%, 100% { background-position: 0 0; }
+            @keyframes appearance-bootstrap-pulse {
+                0%, 100% { opacity: .72; }
+                50% { opacity: 1; }
             }
             @media (prefers-reduced-motion: reduce) {
                 #root:empty::after {
                     animation: none;
-                    background: var(--bootstrap-ink);
                 }
             }
         </style>
@@ -58,7 +54,6 @@
             document.documentElement.classList.toggle("dark", theme === "dark");
             document.documentElement.style.colorScheme = theme;
             document.documentElement.style.setProperty("--background", theme === "dark" ? "#101010" : "#f8f8fa");
-            document.documentElement.style.setProperty("--bootstrap-ink", theme === "dark" ? "#f3f3f5" : "#1d1d21");
         </script>
     </head>
     <body class="bg-background text-foreground antialiased">

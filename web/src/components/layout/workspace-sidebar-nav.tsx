@@ -102,7 +102,6 @@ function WorkspaceSwitcher({ collapsed, onNavigate, onExpand, onCollapse }: { co
             <Link to="/" onClick={onNavigate} className="app-workspace-sidebar-brand-button group" aria-label={`${institute ? instituteBrand.name : appearance.brandName}首页`}>
                 {institute ? <span className="app-workspace-institute-brand">
                     <img src={instituteBrand.wordmark} alt={`${instituteBrand.name} / ${instituteBrand.latinName}`} width={432} height={168} />
-                    <span>{instituteBrand.workbench}</span>
                 </span> : <span className="flex min-w-0 items-center gap-2">
                     <BrandLogoFrame className="app-workspace-brand-mark grid size-8 shrink-0 place-items-center rounded-[var(--r-sm)] shadow-sm" logoClassName="size-5 object-contain" alt="" fallback={<span className="app-workspace-brand-placeholder" aria-hidden>B</span>} />
                     <span className="flex min-w-0">
@@ -278,6 +277,7 @@ function NavGroup({ group, activeId, onNavigate, onOpenSearch, collapsed }: { gr
 }
 
 export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExpand, onCollapse }: { collapsed: boolean; onNavigate: () => void; onOpenSearch: () => void; onExpand: () => void; onCollapse: () => void }) {
+    const platform = isPlatformWorkspaceMode();
     const theme = useThemeStore((state) => state.theme);
     const setTheme = useThemeStore((state) => state.setTheme);
     const { pathname } = useLocation();
@@ -343,7 +343,7 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
             </LayoutGroup>
 
             <div className="app-workspace-sidebar-footer shrink-0 px-3 py-3">
-                {!isPlatformWorkspaceMode() && <OnboardingEntry compact={collapsed} />}
+                {!platform && <OnboardingEntry compact={collapsed} />}
                 {footer.length ? (
                     <div className="flex flex-col gap-0.5">
                         {footer.map((item) => (
@@ -351,9 +351,9 @@ export function WorkspaceSidebarNav({ collapsed, onNavigate, onOpenSearch, onExp
                         ))}
                     </div>
                 ) : null}
-                <WorkspaceSidebarSocialLinks collapsed={collapsed} onExpand={onExpand} />
-                <div className={cn("app-workspace-sidebar-utility-row", collapsed && "is-collapsed")}>
-                    <WorkspaceSidebarUpdate collapsed={collapsed} leading={<WorkspaceSidebarAccount collapsed={collapsed} />} />
+                {!platform && <WorkspaceSidebarSocialLinks collapsed={collapsed} onExpand={onExpand} />}
+                <div className={cn(platform ? "app-workspace-platform-utilities" : "app-workspace-sidebar-utility-row", collapsed && "is-collapsed")}>
+                    {platform ? <WorkspaceSidebarAccount collapsed={collapsed} /> : <WorkspaceSidebarUpdate collapsed={collapsed} leading={<WorkspaceSidebarAccount collapsed={collapsed} />} />}
                     <AnimatedThemeToggler theme={theme} onThemeChange={setTheme} aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"} title={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"} className="app-workspace-theme-action">
                         {theme === "dark" ? <Sun className="size-4" /> : <Moon className="size-4" />}
                     </AnimatedThemeToggler>

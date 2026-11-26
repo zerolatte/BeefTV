@@ -80,7 +80,7 @@
     --control-selected-fg: var(--user-selected-ink);
     --user-focus: #0077b5;
     --control-focus-ring: var(--user-focus);
-    --workspace-brand-header-height: 124px;
+    --workspace-brand-header-height: 100px;
 }
 
 .dark .app-product-workspace.app-institute-workspace,

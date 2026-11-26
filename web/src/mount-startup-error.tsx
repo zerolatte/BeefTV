@@ -2,6 +2,7 @@ import React, { useState, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 import { WorkspaceStartupError } from "@/components/workspace/workspace-startup-error";
+import { BrandLoadingLogo } from "@/components/brand/brand-loading-logo";
 import {
     getDesktopBootSnapshot,
     normalizeWorkspaceStartupFailure,
@@ -60,7 +61,7 @@ function StandaloneStartupProgressHost() {
             className="app-user-workspace flex min-h-dvh w-full flex-col items-center justify-center gap-5 px-6"
             style={{ background: "var(--user-page-bg)", color: "var(--user-ink)" }}
         >
-            <span className="beeftv-loading-logo" aria-hidden="true" />
+            <BrandLoadingLogo />
             <div className="max-w-md text-center">
                 <p
                     className="text-[length:var(--fs-body)] leading-[22px] font-medium"

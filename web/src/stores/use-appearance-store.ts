@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
-import { resolveEmbeddedAssetUrl } from "@/lib/embedded-runtime";
+import { isEmbeddedRuntime, resolveEmbeddedAssetUrl } from "@/lib/embedded-runtime";
+import { instituteBrand } from "@/components/brand/institute-brand";
 import type { PublicAppearance } from "@/services/api/appearance";
 import { applySkinTheme, DEFAULT_CLASSIC_SKIN, normalizeSkinDefinition } from "@/lib/skin-themes";
 
@@ -107,16 +108,20 @@ export function commitPublicAppearance(value?: Partial<PublicAppearance> | null)
 
 export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocument: Document | undefined = typeof document === "undefined" ? undefined : document) {
     if (!targetDocument) return;
-    targetDocument.title = appearance.seoTitle || appearance.brandName;
-    setMeta(targetDocument, "name", "description", appearance.seoDescription);
-    setMeta(targetDocument, "name", "keywords", appearance.seoKeywords);
-    setMeta(targetDocument, "property", "og:title", appearance.seoTitle || appearance.brandName);
-    setMeta(targetDocument, "property", "og:description", appearance.seoDescription);
-    setMeta(targetDocument, "property", "og:site_name", appearance.brandName);
+    // 网页在登录前就使用研究院品牌；嵌入工作区继续遵循宿主外观配置。
+    const institute = !isEmbeddedRuntime();
+    const title = institute ? instituteBrand.title : appearance.seoTitle || appearance.brandName;
+    const description = institute ? instituteBrand.description : appearance.seoDescription;
+    targetDocument.title = title;
+    setMeta(targetDocument, "name", "description", description);
+    setMeta(targetDocument, "name", "keywords", institute ? "" : appearance.seoKeywords);
+    setMeta(targetDocument, "property", "og:title", title);
+    setMeta(targetDocument, "property", "og:description", description);
+    setMeta(targetDocument, "property", "og:site_name", institute ? instituteBrand.name : appearance.brandName);
     setMeta(targetDocument, "property", "og:type", "website");
     setMeta(targetDocument, "name", "twitter:card", "summary");
-    setMeta(targetDocument, "name", "twitter:title", appearance.seoTitle || appearance.brandName);
-    setMeta(targetDocument, "name", "twitter:description", appearance.seoDescription);
+    setMeta(targetDocument, "name", "twitter:title", title);
+    setMeta(targetDocument, "name", "twitter:description", description);
     const mode = "dark";
     setMeta(targetDocument, "name", "theme-color", appearance.activeSkin.tokens[mode].canvas);
     let favicon = targetDocument.querySelector<HTMLLinkElement>('link[rel~="icon"]');
@@ -125,7 +130,10 @@ export function applyAppearanceMetadata(appearance: PublicAppearance, targetDocu
         favicon.rel = "icon";
         targetDocument.head.appendChild(favicon);
     }
-    favicon.href = appearanceLogoURL(appearance, "dark");
+    favicon.href = institute ? instituteBrand.icon : appearanceLogoURL(appearance, "dark");
+    // 自定义图标可以是不同图片格式，避免保留静态入口的 MIME 声明。
+    if (institute) favicon.type = "image/jpeg";
+    else favicon.removeAttribute("type");
 
     const location = targetDocument.defaultView?.location;
     if (location && (location.protocol === "http:" || location.protocol === "https:")) {
