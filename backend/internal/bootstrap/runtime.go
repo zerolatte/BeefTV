@@ -34,6 +34,7 @@ import (
 	"infinite-canvas/backend/internal/plugins"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/runtimeinfo"
+	"infinite-canvas/backend/internal/storage"
 	httptransport "infinite-canvas/backend/internal/transport/http"
 	"infinite-canvas/backend/internal/workspace"
 
@@ -45,6 +46,7 @@ import (
 
 type Runtime struct {
 	platformCredits  *credits.Service
+	platformStorage  *storage.Service
 	creditDone       chan struct{}
 	workspaceLock    *os.File
 	cfg              Config

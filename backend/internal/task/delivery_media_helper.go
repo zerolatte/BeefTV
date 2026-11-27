@@ -48,7 +48,7 @@ type DeliveryMediaDeps struct {
 	BindRuntime       func(context.Context, generation.CallMeta) context.Context
 }
 
-func PersistRemoteGenerationArtifact(deps DeliveryMediaDeps, userID, mediaType, artifactURL, identity string, downloadTimeout time.Duration) (*model.Resource, error) {
+func PersistRemoteGenerationArtifact(deps DeliveryMediaDeps, userID, mediaType, artifactURL, identity string, downloadTimeout time.Duration) (saved *model.Resource, saveErr error) {
 	if deps.Resources == nil {
 		return nil, errors.New("generation media adapter is not initialized")
 	}
@@ -58,7 +58,38 @@ func PersistRemoteGenerationArtifact(deps DeliveryMediaDeps, userID, mediaType, 
 	if userID == "" || artifactURL == "" || identity == "" {
 		return nil, fmt.Errorf("generation artifact identity is incomplete")
 	}
-	return deps.Resources.RecoverOwned(userID, identity, func() (localasset.RecoveredArtifact, error) {
+	ctx := context.Background()
+	if deps.BeginDownload != nil {
+		var finish func(error)
+		var err error
+		ctx, finish, err = deps.BeginDownload(userID, identity, downloadTimeout)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { finish(saveErr) }()
+		// 下载和持久化共用取消范围；内部下载结束不能提前取消 OSS 上传。
+		deps.BeginDownload = func(string, string, time.Duration) (context.Context, func(error), error) {
+			return ctx, func(error) {}, nil
+		}
+	}
+	var release func()
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
+	return deps.Resources.RecoverOwnedContext(ctx, userID, identity, func() (localasset.RecoveredArtifact, error) {
+		if strings.HasPrefix(artifactURL, "http://") || strings.HasPrefix(artifactURL, "https://") {
+			managed, err := ManagedDeliveryArtifact(deps.Repo, deps.DecryptSetting, userID, identity)
+			if err != nil {
+				return localasset.RecoveredArtifact{}, err
+			}
+			if !managed {
+				artifact, cleanup, err := openStreamGenerationArtifact(ctx, deps, userID, identity, mediaType, artifactURL)
+				release = cleanup
+				return artifact, err
+			}
+		}
 		kind, data, mimeType, fileName, width, height, durationMs, err := DecodeGenerationArtifact(deps, userID, identity, mediaType, artifactURL, downloadTimeout)
 		if err != nil {
 			return localasset.RecoveredArtifact{}, err
@@ -105,24 +136,9 @@ func DecodeGenerationArtifact(deps DeliveryMediaDeps, userID, identity, mediaTyp
 		if _, urlErr := outbound.ValidateOutboundURLContext(ctx, artifactURL); urlErr != nil {
 			return "", nil, "", "", 0, 0, 0, urlErr
 		}
-		limit, policyErr := deps.MaxBytes()
-		if policyErr != nil {
-			return "", nil, "", "", 0, 0, 0, policyErr
-		}
-		maxBytes := limit + 1
-		headers, headerErr := ImageDownloadHeaders(deps.Repo, deps.DecryptTaskInput, deps.DecryptSetting, deps.ResolveConfig, deps.ProtocolRegistry, userID, identity, kind, artifactURL)
-		if headerErr != nil {
-			return "", nil, "", "", 0, 0, 0, headerErr
-		}
-		downloadOptions := outbound.ResumableOptions{
-			PartialPath: ArtifactDownloadPartialPath(deps.DataDir, userID, identity),
-			Headers:     headers,
-			MaxBytes:    maxBytes,
-			OnProgress: func(update outbound.ResumableProgress) {
-				if deps.Progress != nil {
-					deps.Progress.Record(identity, DeliveryProgressFromOutbound(identity, update))
-				}
-			},
+		downloadOptions, optionsErr := generationArtifactDownloadOptions(deps, userID, identity, kind, artifactURL)
+		if optionsErr != nil {
+			return "", nil, "", "", 0, 0, 0, optionsErr
 		}
 		result, downloadErr := outbound.DownloadResumable(ctx, artifactURL, downloadOptions)
 		if managed && downloadErr != nil && deps.RefreshManagedURL != nil {
@@ -143,7 +159,7 @@ func DecodeGenerationArtifact(deps DeliveryMediaDeps, userID, identity, mediaTyp
 		}
 		if downloadErr != nil {
 			if errors.Is(downloadErr, outbound.ErrResourceTooLarge) {
-				return "", nil, "", "", 0, 0, 0, kernel.BadAuthRequest(fmt.Sprintf("远程资源必须小于 %s", localasset.FormatStorageLimit(maxBytes)))
+				return "", nil, "", "", 0, 0, 0, kernel.BadAuthRequest(fmt.Sprintf("远程资源必须小于 %s", localasset.FormatStorageLimit(downloadOptions.MaxBytes)))
 			}
 			return "", nil, "", "", 0, 0, 0, downloadErr
 		}

@@ -97,7 +97,7 @@ func ProcessCanvasMedia(
 			clean()
 		}
 	}()
-	resource, err := resources.RecoverOwned(task.UserID, task.ID+":0", func() (localasset.RecoveredArtifact, error) {
+	resource, err := resources.RecoverOwnedContext(ctx, task.UserID, task.ID+":0", func() (localasset.RecoveredArtifact, error) {
 		source, body, err := openResource(task.UserID, input.ResourceID)
 		if err != nil {
 			return localasset.RecoveredArtifact{}, err
@@ -259,7 +259,7 @@ type WorkerExecuteDeps struct {
 	RunCanvasMedia        func(*model.Task, context.Context) error
 	BeginRouteAttempt     func(*model.Task) (*model.RouteAttempt, error)
 	ExecuteRoute          func(context.Context, *model.Task, *model.RouteAttempt) (RouteExecutionResult, error)
-	PersistGeneratedMedia func(model.Task, map[string]interface{}) (map[string]interface{}, error)
+	PersistGeneratedMedia func(context.Context, model.Task, map[string]interface{}) (map[string]interface{}, error)
 	FinalizeTurnaround    func(model.Task, map[string]interface{}) (bool, error)
 	DecryptTaskInput      func(string) (string, error)
 	ShouldDeferImage      func(model.Task, error, bool) bool
@@ -330,7 +330,7 @@ func ExecuteClaimedTask(deps WorkerExecuteDeps, session taskruntime.Session) tas
 	providerSucceeded := routeResult.ProviderSucceeded
 	providerAccepted := providerSucceeded || strings.TrimSpace(task.ProviderRequestID) != ""
 	if err == nil {
-		result, err = deps.PersistGeneratedMedia(*task, result)
+		result, err = deps.PersistGeneratedMedia(ctx, *task, result)
 	}
 	if err == nil {
 		_, err = deps.FinalizeTurnaround(*task, result)

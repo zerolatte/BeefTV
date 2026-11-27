@@ -421,6 +421,7 @@ func NewServiceIngestor(resources *localasset.Service, maxBytes func() (int64, e
 }
 
 func PersistTaskGeneratedMediaResult(
+	ctx context.Context,
 	ingestor *Ingestor,
 	task model.Task,
 	result map[string]interface{},
@@ -433,7 +434,7 @@ func PersistTaskGeneratedMediaResult(
 		return nil, fmt.Errorf("生成结果缺少任务身份")
 	}
 	persisted, err = ingestor.IngestResult(task.UserID, result, IngestOptions{
-		EnforceQuota: true, IdentityPrefix: task.ID + ":inline",
+		Context: ctx, EnforceQuota: true, IdentityPrefix: task.ID + ":inline",
 	})
 	if full := kernel.DiskFullError(err); full != nil {
 		return nil, full

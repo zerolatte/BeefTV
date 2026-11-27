@@ -8,7 +8,6 @@ import (
 
 	localasset "infinite-canvas/backend/internal/asset"
 	"infinite-canvas/backend/internal/assets"
-	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 	"infinite-canvas/backend/internal/resource"
 )
@@ -42,6 +41,9 @@ func (s *Service) EnsureResourceMediaMetadata(ctx context.Context, u, id string)
 	return s.resourceDomain().EnsureMediaMetadata(ctx, u, id)
 }
 func (s *Service) directResourceURL(item *model.Resource, exp time.Time) (string, error) {
+	if item != nil && item.Provider == "oss" {
+		return s.resourceDomain().SignedReference(context.Background(), item.UserID, item.ID, time.Until(exp))
+	}
 	return resource.DirectURL(item, exp, s.settingsEncryptionKey)
 }
 func (s *Service) prepareResourceDelivery(u string, item *model.Resource, opts ResourceDeliveryOptions) (*ResourceDelivery, error) {
@@ -74,11 +76,11 @@ func (s *Service) PutChunkedResourceUpload(u, uploadID string, index int, body i
 func (s *Service) CompleteChunkedResourceUpload(u, uploadID string) (*model.Resource, error) {
 	return s.resourceDomain().CompleteChunkedUpload(u, uploadID)
 }
+func (s *Service) CompleteChunkedResourceUploadContext(ctx context.Context, u, uploadID string) (*model.Resource, error) {
+	return s.resourceDomain().CompleteChunkedUploadContext(ctx, u, uploadID)
+}
 func (s *Service) ImportResourceURL(u, rawURL, kind string, w, ht int, dur int64, id ...string) (*model.Resource, error) {
 	return resource.ImportURLWithPolicy(s.resourceDomain(), s.IsLocalMode(), s.RuntimePolicy, u, rawURL, kind, w, ht, dur, id...)
-}
-func normalizedResourceUploadKey(values []string) *string {
-	return localasset.NormalizedUploadKey(values)
 }
 func resourceUploadInProgress() *AppError { return resource.UploadInProgress() }
 func (s *Service) OpenResource(u, id string) (*model.Resource, io.ReadCloser, error) {
@@ -87,19 +89,6 @@ func (s *Service) OpenResource(u, id string) (*model.Resource, io.ReadCloser, er
 func (s *Service) openResourceRange(u string, item *model.Resource, rng string) (*ResourceStream, error) {
 	return s.resourceDomain().OpenOwnedRange(u, item, rng)
 }
-func (s *Service) storeResource(u, kind, name, mime string, sz int64, w, ht int, dur int64, body io.Reader, key *string, _ bool) (*model.Resource, bool, error) {
-	return s.resourceDomain().Store(u, kind, name, mime, sz, w, ht, dur, body, key)
-}
-func (s *Service) storeResourceObject(item *model.Resource, name string, body io.Reader) (string, error) {
-	return s.resourceDomain().WriteObject(item, name, body)
-}
-func (s *Service) retryStoredResource(u string, item *model.Resource, kind, mime string, sz int64, body io.Reader, _ ...bool) (*model.Resource, error) {
-	return resource.RetryOwnedItem(s.resourceDomain(), u, item, kind, mime, sz, body)
-}
-func intValue(value any) int { return resource.IntValue(value) }
 func resourceFileExtension(fileName, mimeType, kind string) string {
 	return localasset.FileExtension(fileName, mimeType, kind)
 }
-func imageDimensions(data []byte) (int, int)       { return resource.ImageDimensions(data) }
-func normalizeSingleByteRange(value string) string { return localasset.NormalizeSingleByteRange(value) }
-func firstNonEmpty(values ...string) string        { return kernel.FirstNonEmpty(values...) }

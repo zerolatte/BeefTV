@@ -1,0 +1,212 @@
+package asset
+
+import (
+	"encoding/json"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"infinite-canvas/backend/internal/model"
+)
+
+func (s *Service) expireSessionsLocked(now time.Time) {
+	for id, sess := range s.sessions {
+		if sess == nil {
+			delete(s.sessions, id)
+			continue
+		}
+		if !sess.mu.TryLock() {
+			continue
+		}
+		if now.Sub(sess.CreatedAt) <= chunkUploadTTL {
+			sess.mu.Unlock()
+			continue
+		}
+		if sess.complete != nil {
+			s.dropSessionFilesLocked(sess)
+			sess.mu.Unlock()
+			delete(s.sessions, id)
+			continue
+		}
+		err := s.releaseAbandonedSessionHeld(sess)
+		sess.mu.Unlock()
+		if err != nil {
+			continue
+		}
+		delete(s.sessions, id)
+	}
+}
+
+func (s *Service) releaseAbandonedSessionHeld(sess *chunkedUploadSession) error {
+	if sess == nil {
+		return nil
+	}
+	existing, err := s.resourceForUploadKey(sess.UserID, &sess.Identity)
+	if err != nil {
+		return err
+	}
+	if existing == nil && sess.Reserved {
+		s.quotaRelease(sess.UserID, sess.Day, sess.Size, sess.Identity)
+	}
+	s.dropSessionFilesLocked(sess)
+	return nil
+}
+
+func (s *Service) abandonStaleSessions() {
+	s.sessionMu.Lock()
+	defer s.sessionMu.Unlock()
+	if err := s.abandonStaleSessionsLocked(); err != nil {
+		log.Printf("upload reservation recovery failed: %v", err)
+	}
+}
+
+func (s *Service) abandonStaleSessionsLocked() error {
+	first := s.releaseOrphanReservationsLocked()
+	if err := s.reconcileSessionDirsLocked(); err != nil && first == nil {
+		first = err
+	}
+	return first
+}
+
+func (s *Service) releaseOrphanReservationsLocked() error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	rows, err := s.repo.ListUploadReservations()
+	if err != nil {
+		return err
+	}
+	var first error
+	for _, row := range rows {
+		row := row
+		if s.liveSessionByIdentityLocked(row.UserID, row.Identity) != nil {
+			continue
+		}
+		existing, lookupErr := s.resourceForUploadKey(row.UserID, &row.Identity)
+		if lookupErr != nil {
+			if first == nil {
+				first = lookupErr
+			}
+			continue
+		}
+		if settleErr := s.settleOrphanReservation(row, existing); settleErr != nil && first == nil {
+			first = settleErr
+		}
+	}
+	return first
+}
+
+func (s *Service) settleOrphanReservation(row model.UserUploadReservation, existing *model.Resource) error {
+	if row.Unattributed() {
+		return nil
+	}
+	if existing != nil && existing.Status == model.ResourceStatusPending {
+		return nil
+	}
+	if existing != nil && existing.Status == model.ResourceStatusReady {
+		return s.commitWitness(row.UserID, row.Identity, row.Size)
+	}
+	if existing != nil && existing.Status != model.ResourceStatusFailed {
+		return s.commitWitness(row.UserID, row.Identity, row.Size)
+	}
+	return s.releaseWitness(row)
+}
+
+func (s *Service) commitWitness(userID, identity string, size int64) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	if err := s.repo.ClearUploadReservation(userID, identity); err != nil {
+		return err
+	}
+	s.quotaCommit(userID, size, identity)
+	return nil
+}
+
+func (s *Service) releaseWitness(row model.UserUploadReservation) error {
+	if s == nil || s.repo == nil {
+		return nil
+	}
+	if err := s.repo.ReleaseIdentifiedDailyUpload(row.UserID, row.Day, row.Identity, row.Size); err != nil {
+		return err
+	}
+	s.quotaRelease(row.UserID, row.Day, row.Size, row.Identity)
+	return nil
+}
+
+func (s *Service) reconcileSessionDirsLocked() error {
+	root := s.sessionRoot()
+	if root == "" {
+		return nil
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var first error
+	keep := func(err error) {
+		if first == nil {
+			first = err
+		}
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if s.sessions[entry.Name()] != nil {
+			continue
+		}
+		dir := filepath.Join(root, entry.Name())
+		payload, readErr := os.ReadFile(filepath.Join(dir, chunkSessionMetaName))
+		if readErr != nil {
+			continue
+		}
+		var meta chunkSessionMeta
+		if json.Unmarshal(payload, &meta) != nil || strings.TrimSpace(meta.UserID) == "" || strings.TrimSpace(meta.Identity) == "" {
+			continue
+		}
+		existing, lookupErr := s.resourceForUploadKey(meta.UserID, &meta.Identity)
+		if lookupErr != nil {
+			keep(lookupErr)
+			continue
+		}
+		if existing != nil {
+			_ = os.RemoveAll(dir)
+			continue
+		}
+		if !meta.Reserved {
+			held, heldErr := s.reservationHeld(meta.UserID, meta.Identity)
+			if heldErr != nil {
+				keep(heldErr)
+				continue
+			}
+			if !held {
+				_ = os.RemoveAll(dir)
+				continue
+			}
+		}
+		s.quotaRelease(meta.UserID, meta.Day, meta.Size, meta.Identity)
+		_ = os.RemoveAll(dir)
+	}
+	return first
+}
+
+func (s *Service) reservationHeld(userID, identity string) (bool, error) {
+	row, err := s.lookupReservation(userID, identity)
+	if err != nil {
+		return false, err
+	}
+	return row != nil, nil
+}
+
+func (s *Service) lookupReservation(userID, identity string) (*model.UserUploadReservation, error) {
+	if s == nil || s.repo == nil {
+		return nil, nil
+	}
+	return s.repo.UploadReservation(userID, identity)
+}

@@ -384,7 +384,7 @@ type VideoTaskRecoveryDeps struct {
 	Backoff               func(model.Task) time.Duration
 	PastRetention         func(model.Task, time.Time) bool
 	AttachDelivery        func(*model.Task)
-	PersistGeneratedMedia func(model.Task, map[string]interface{}) (map[string]interface{}, error)
+	PersistGeneratedMedia func(context.Context, model.Task, map[string]interface{}) (map[string]interface{}, error)
 	SaveTaskCompletion    func(*model.Task, []byte, []byte, bool) error
 	RegisterOutput        func(model.Task) error
 	AttachRecovered       func(*model.Task) *model.Task
@@ -539,7 +539,7 @@ func QueryFailedVideoTaskWithDeps(ctx context.Context, deps VideoTaskRecoveryDep
 		return &ProviderTaskQueryResult{Task: projected, ProviderStatus: providerStatus, Recovered: false}, nil
 	}
 
-	result, err = deps.PersistGeneratedMedia(*task, result)
+	result, err = deps.PersistGeneratedMedia(ctx, *task, result)
 	if err != nil {
 		_ = deps.Log(task.UserID, task.ID, "error", "人工查询已取得视频，但结果保存失败", err.Error())
 		return nil, err

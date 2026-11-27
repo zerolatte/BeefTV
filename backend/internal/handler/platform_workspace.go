@@ -84,5 +84,6 @@ func RegisterPlatformCreative(api *gin.RouterGroup, svc CanvasAPIService) {
 	RegisterTaskRoutes(r, svc)
 	RegisterDesktopUserDataRoutes(r, svc, svc.CanvasService(), svc.PromptService(), svc.AssetLibraryService(), svc.ResourceService(), svc.PlaybackService(), svc, svc, svc)
 	RegisterChunkedUploadRoutes(r, svc, false)
+	registerPlatformResourceImport(r, svc, svc.ResourceService())
 	RegisterProjectRoutes(r, svc, svc.ProjectService(), svc)
 }

@@ -19,6 +19,7 @@ func (s *Service) playbackRuntime() *playback.Service {
 	s.playbackOnce.Do(func() {
 		runner := playbackRunner{svc: s}
 		s.playback = playback.New(playback.Deps{
+			Materialize:    s.resourceDomain().Materialize,
 			DataDir:        s.dataDir,
 			Store:          playbackStore{repo: s.repo},
 			Runner:         runner,

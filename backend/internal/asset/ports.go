@@ -19,6 +19,17 @@ type BlobStore interface {
 	Exists(objectKey string) error
 }
 
+// ObjectStorage 只负责远端字节与位置策略；资源身份、归属、配额仍由本领域管理。
+type ObjectStorage interface {
+	Select(*model.Resource) error
+	Write(context.Context, *model.Resource, string) (string, error)
+	Open(context.Context, *model.Resource, string) (*ResourceStream, error)
+	Exists(context.Context, *model.Resource) (bool, error)
+	Delete(context.Context, *model.Resource) error
+	Sign(context.Context, *model.Resource, time.Duration) (string, error)
+	Fallback(*model.Resource, error) error
+}
+
 // Repository is the durable metadata port for resource rows, deletion outbox,
 // and live-reference snapshots. Adapters wrap repository.Repository.
 type Repository interface {
@@ -29,6 +40,7 @@ type Repository interface {
 	Resource(id string) (*model.Resource, error)
 	ResourceForUser(userID string, id string) (*model.Resource, error)
 	Resources(userID string, limit int) ([]model.Resource, error)
+	ReadyRemoteResourcePage(context.Context, string, int) ([]model.Resource, error)
 	ResourceByUploadKey(userID string, uploadKey string) (*model.Resource, error)
 	ListUploadReservations() ([]model.UserUploadReservation, error)
 	UploadReservation(userID string, identity string) (*model.UserUploadReservation, error)
@@ -92,4 +104,5 @@ type Dependencies struct {
 	Lifecycle    Lifecycle
 	LocalStorage bool
 	DataDir      string
+	Objects      ObjectStorage
 }

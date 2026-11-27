@@ -85,17 +85,19 @@ func (s *Service) queryFailedVideoTask(ctx context.Context, task *model.Task, cl
 				return res, projection.Status, nil, qErr
 			}, nil
 		},
-		RecordMissing:         s.recordMissingVideoReceiptOutcome,
-		RecordUnrecoverable:   s.recordUnrecoverableVideoOutcome,
-		ClassifyOutcome:       classifyFailedVideoQueryOutcome,
-		Backoff:               videoRecoveryPollBackoff,
-		PastRetention:         videoTaskPastRetentionWindow,
-		AttachDelivery:        s.attachTaskDelivery,
-		PersistGeneratedMedia: s.persistTaskGeneratedMediaResult,
-		SaveTaskCompletion:    s.saveTaskCompletionWithinStorageQuota,
-		RegisterOutput:        s.RegisterTaskOutputFromTask,
-		AttachRecovered:       s.attachRecoveredProviderTask,
-		Log:                   s.log,
+		RecordMissing:       s.recordMissingVideoReceiptOutcome,
+		RecordUnrecoverable: s.recordUnrecoverableVideoOutcome,
+		ClassifyOutcome:     classifyFailedVideoQueryOutcome,
+		Backoff:             videoRecoveryPollBackoff,
+		PastRetention:       videoTaskPastRetentionWindow,
+		AttachDelivery:      s.attachTaskDelivery,
+		PersistGeneratedMedia: func(ctx context.Context, task model.Task, result map[string]interface{}) (map[string]interface{}, error) {
+			return s.persistTaskGeneratedMediaResult(task, result, ctx)
+		},
+		SaveTaskCompletion: s.saveTaskCompletionWithinStorageQuota,
+		RegisterOutput:     s.RegisterTaskOutputFromTask,
+		AttachRecovered:    s.attachRecoveredProviderTask,
+		Log:                s.log,
 	}, task, claimUserID)
 }
 

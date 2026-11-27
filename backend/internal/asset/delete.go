@@ -1,6 +1,7 @@
 package asset
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -279,14 +280,21 @@ func (s *Service) deleteTrustedObject(userID string, resource *model.Resource) e
 		return errors.New("资源仍被画布历史版本引用")
 	}
 	provider := strings.ToLower(strings.TrimSpace(resource.Provider))
-	if s.localStorage && provider != "" && provider != "local" {
-		return nil
-	}
 	switch provider {
 	case "", "local":
 		return s.DeleteLocalObject(resource.ObjectKey)
+	case "oss":
+		if s.objects == nil {
+			return ResourceNotLocal()
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+		defer cancel()
+		if err := s.objects.Delete(ctx, resource); err != nil {
+			return err
+		}
+		return s.DeleteLocalObject(resource.ObjectKey)
 	default:
-		return nil
+		return ResourceNotLocal()
 	}
 }
 

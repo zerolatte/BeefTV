@@ -3,7 +3,6 @@ package asset
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"infinite-canvas/backend/internal/mediatools"
@@ -53,15 +52,12 @@ func (s *Service) probeMediaMetadata(ctx context.Context, resource *model.Resour
 	if !missingMediaMetadata(resource) {
 		return nil
 	}
-	if strings.TrimSpace(resource.Provider) != "local" || s.blobs == nil {
-		return fmt.Errorf("参考素材不是可读取的本地文件，请重新导入")
-	}
-	file, err := s.blobs.Open(resource.ObjectKey)
+	path, release, err := s.materialize(ctx, resource)
 	if err != nil {
-		return fmt.Errorf("参考素材文件无法读取，请重新导入")
+		return err
 	}
-	defer file.Close()
-	facts, err := mediatools.ProbeLocal(ctx, file.Name())
+	defer release()
+	facts, err := mediatools.ProbeLocal(ctx, path)
 	if err != nil {
 		return err
 	}

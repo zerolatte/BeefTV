@@ -2,6 +2,7 @@ package asset
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,6 +36,10 @@ func (s *Service) Open(userID string, id string) (*model.Resource, io.ReadCloser
 }
 
 func (s *Service) OpenRange(userID string, id string, rangeHeader string) (*ResourceStream, error) {
+	return s.OpenRangeContext(context.Background(), userID, id, rangeHeader)
+}
+
+func (s *Service) OpenRangeContext(ctx context.Context, userID string, id string, rangeHeader string) (*ResourceStream, error) {
 	if s == nil || s.repo == nil {
 		return nil, ResourceMissing()
 	}
@@ -42,7 +47,7 @@ func (s *Service) OpenRange(userID string, id string, rangeHeader string) (*Reso
 	if err != nil {
 		return nil, err
 	}
-	return s.OpenOwnedRange(userID, resource, rangeHeader)
+	return s.openOwnedRange(ctx, userID, resource, rangeHeader)
 }
 
 func (s *Service) OpenPublicRange(id string, rangeHeader string) (*ResourceStream, error) {
@@ -60,11 +65,21 @@ func (s *Service) OpenPublicRange(id string, rangeHeader string) (*ResourceStrea
 }
 
 func (s *Service) OpenOwnedRange(userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
+	return s.openOwnedRange(context.Background(), userID, resource, rangeHeader)
+}
+
+func (s *Service) openOwnedRange(ctx context.Context, userID string, resource *model.Resource, rangeHeader string) (*ResourceStream, error) {
 	if resource == nil {
 		return nil, ResourceMissing()
 	}
 	if resource.Status != model.ResourceStatusReady {
 		return nil, ResourceNotReady()
+	}
+	if userID == "" || resource.UserID != userID {
+		return nil, ResourceMissing()
+	}
+	if resource.Provider == "oss" && s.objects != nil {
+		return s.objects.Open(ctx, resource, NormalizeSingleByteRange(rangeHeader))
 	}
 	if resource.Provider != "local" {
 		return nil, ResourceNotLocal()
@@ -141,7 +156,10 @@ func (s *Service) PrepareOwnedDelivery(userID string, resource *model.Resource, 
 	if resource.Status != model.ResourceStatusReady {
 		return nil, ResourceNotReady()
 	}
-	if resource.Provider != "local" {
+	if userID == "" || resource.UserID != userID {
+		return nil, ResourceMissing()
+	}
+	if resource.Provider != "local" && !(resource.Provider == "oss" && s.objects != nil) {
 		return nil, ResourceNotLocal()
 	}
 	_ = userID

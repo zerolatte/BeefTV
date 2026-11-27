@@ -14,6 +14,7 @@ import (
 	"infinite-canvas/backend/internal/platformadmin"
 	"infinite-canvas/backend/internal/repository"
 	"infinite-canvas/backend/internal/runtimeinfo"
+	"infinite-canvas/backend/internal/storage"
 	"os"
 )
 
@@ -71,6 +72,8 @@ func openPlatform(cfg Config) (result *Runtime, openErr error) {
 	}
 	auth := identity.New(repo)
 	svc := app.NewLocal(repo, cfg.DataDir)
+	storageDomain := storage.New(repo, auth, storage.Options{Secrets: localcrypto.TaskCodec{DataDir: cfg.DataDir}})
+	svc.ResourceService().ConfigureObjectStorage(storageDomain)
 	defer func() {
 		if openErr != nil {
 			_ = svc.Close()
@@ -105,13 +108,30 @@ func openPlatform(cfg Config) (result *Runtime, openErr error) {
 	handler.RegisterPlatformWorkspace(private, svc, billing, instance.ID)
 	handler.RegisterPlatformAdmin(private, auth, billing, platformadmin.New(auth, repo, platformadmin.Options{Secrets: localcrypto.TaskCodec{DataDir: cfg.DataDir}, Plugins: svc.PluginDomain()}))
 	handler.RegisterPlatformCreative(private, svc)
+	handler.RegisterPlatformStorage(private, storageDomain)
 	handler.RegisterPlatformCanvasOperations(private, svc, operations.NewStore(db))
 	router.NoRoute(func(c *gin.Context) { c.JSON(404, gin.H{"code": 404, "reason": "not_found", "msg": "请求不存在"}) })
-	return &Runtime{cfg: cfg, db: db, service: svc, handler: router, status: status, workspaceLock: lock, serveErr: make(chan error, 1), platformCredits: billing}, nil
+	return &Runtime{cfg: cfg, db: db, service: svc, handler: router, status: status, workspaceLock: lock, serveErr: make(chan error, 1), platformCredits: billing, platformStorage: storageDomain}, nil
 }
 
 func (r *Runtime) runCreditReconciliation(ctx context.Context) {
+	var mediaDone chan struct{}
+	if r.platformStorage != nil {
+		mediaDone = make(chan struct{})
+		go func() { defer close(mediaDone); r.service.ResourceService().RunObjectMaintenance(ctx) }()
+	}
+	var storageDone chan struct{}
+	if r.platformStorage != nil {
+		storageDone = make(chan struct{})
+		go func() { defer close(storageDone); r.platformStorage.Run(ctx) }()
+	}
 	if r.platformCredits != nil {
 		r.platformCredits.Run(ctx)
+	}
+	if storageDone != nil {
+		<-storageDone
+	}
+	if mediaDone != nil {
+		<-mediaDone
 	}
 }

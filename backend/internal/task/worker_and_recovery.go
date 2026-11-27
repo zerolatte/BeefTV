@@ -490,7 +490,7 @@ func ProcessTimelineRender(
 			renderCleanup()
 		}
 	}()
-	resource, err := resources.RecoverOwned(task.UserID, TimelineRenderArtifactIdentity(task.ID), func() (localasset.RecoveredArtifact, error) {
+	resource, err := resources.RecoverOwnedContext(ctx, task.UserID, TimelineRenderArtifactIdentity(task.ID), func() (localasset.RecoveredArtifact, error) {
 		rendered, cleanup, renderErr := renderer(task.UserID).Render(ctx, plan, func(stage string, percent int) error {
 			return UpdateTimelineTaskProgress(repo, task, stage, percent)
 		})

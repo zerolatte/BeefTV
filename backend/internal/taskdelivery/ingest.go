@@ -2,6 +2,7 @@ package taskdelivery
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -30,6 +31,7 @@ const imageHeaderDecodeLimit = 2 << 20
 // IdentityPrefix, when set, is the stable owner key RecoverOwned can resume;
 // the empty prefix mints a new generated identity (concurrent inlines stay isolated).
 type IngestOptions struct {
+	Context            context.Context
 	SkipInvalidDataURL bool
 	EnforceQuota       bool
 	IdentityPrefix     string
@@ -38,6 +40,7 @@ type IngestOptions struct {
 // InlineArtifact is one decoded generated payload. Body is the original bytes;
 // callers must not rebuild it by submitting a new provider generation.
 type InlineArtifact struct {
+	Context      context.Context
 	Kind         string
 	FileName     string
 	MimeType     string
@@ -169,6 +172,7 @@ func (i *Ingestor) ingestInline(userID string, item map[string]interface{}, raw,
 		return ErrIngestStoreMissing
 	}
 	resource, err := i.store.PersistInline(userID, InlineArtifact{
+		Context:      opts.Context,
 		Kind:         kind,
 		FileName:     "generated." + asset.ExtensionFromMimeType(mimeType),
 		MimeType:     mimeType,

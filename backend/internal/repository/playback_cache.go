@@ -4,7 +4,7 @@ import "infinite-canvas/backend/internal/model"
 
 func (r *Repository) PlaybackCopiesForUser(userID string) ([]model.Resource, error) {
 	var rows []model.Resource
-	err := r.db.Where("user_id = ? AND provider = ? AND status = ? AND playback_status IN ?", userID, "local", model.ResourceStatusReady, []string{model.PlaybackStatusReady, model.PlaybackStatusFailed}).Find(&rows).Error
+	err := r.db.Where("user_id = ? AND status = ? AND playback_status IN ?", userID, model.ResourceStatusReady, []string{model.PlaybackStatusReady, model.PlaybackStatusFailed}).Find(&rows).Error
 	return rows, err
 }
 

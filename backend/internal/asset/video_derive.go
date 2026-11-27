@@ -73,7 +73,7 @@ func (s *Service) ExtractVideoFrames(ctx context.Context, userID, resourceID str
 	if len(req.TimesMs) > mediatools.MaxExtractedFrames {
 		return nil, kernel.BadAuthRequest(fmt.Sprintf("单次最多截取 %d 帧", mediatools.MaxExtractedFrames))
 	}
-	srcResource, srcFile, cleanupSrc, err := s.openLocalVideoSource(userID, resourceID)
+	srcResource, srcFile, cleanupSrc, err := s.openLocalVideoSource(ctx, userID, resourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (s *Service) SeparateVideoAudio(ctx context.Context, userID, resourceID str
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	srcResource, srcFile, cleanupSrc, err := s.openLocalVideoSource(userID, resourceID)
+	srcResource, srcFile, cleanupSrc, err := s.openLocalVideoSource(ctx, userID, resourceID)
 	if err != nil {
 		return nil, err
 	}
@@ -277,6 +277,12 @@ func (s *Service) storeDerivedBatch(ctx context.Context, userID string, baseKey 
 	rollbackStaged := func(cause error) {
 		for idx := len(staged) - 1; idx >= 0; idx-- {
 			slot := &staged[idx]
+			if s.objects != nil && slot.resource != nil {
+				// 混合存储保留暂存和待完成身份，元数据事务失败后可以重放，不能遗留远端孤儿。
+				slot.resource.Status = model.ResourceStatusPending
+				_ = s.repo.SaveResource(slot.resource)
+				continue
+			}
 			if slot.heldQuota && s.quota != nil {
 				s.quota.Release(userID, slot.day, slot.spec.size, slot.quotaIdentity)
 				slot.heldQuota = false
@@ -446,6 +452,12 @@ func (s *Service) stageOneDerivedSlot(
 			Width: spec.width, Height: spec.height, DurationMs: spec.durationMs, UploadKey: uploadKey,
 			CreatedAt: now, UpdatedAt: now,
 		}
+		if err := s.selectStorage(&res); err != nil {
+			if s.quota != nil {
+				s.quota.Release(userID, day, spec.size, qIdentity)
+			}
+			return stagedDerivedSlot{}, err
+		}
 		if err := s.repo.CreateResource(&res); err != nil {
 			if s.quota != nil {
 				s.quota.Release(userID, day, spec.size, qIdentity)
@@ -456,9 +468,18 @@ func (s *Service) stageOneDerivedSlot(
 			}
 			return stagedDerivedSlot{}, err
 		}
-		etag, err := s.WriteObject(&res, spec.fileName, file)
+		etag, err := s.writeObject(ctx, &res, spec.fileName, file)
 		res.UpdatedAt = time.Now()
 		if err != nil {
+			if s.objects != nil {
+				if saveErr := s.persistFailedResource(&res, err); saveErr != nil {
+					return stagedDerivedSlot{}, errors.Join(err, saveErr)
+				}
+				if s.quota != nil {
+					s.quota.Release(userID, day, spec.size, qIdentity)
+				}
+				return stagedDerivedSlot{}, err
+			}
 			if s.quota != nil {
 				s.quota.Release(userID, day, spec.size, qIdentity)
 			}
@@ -532,21 +553,13 @@ func (s *Service) stageOneDerivedSlot(
 	}
 	defer file.Close()
 
-	kind := NormalizeKind(spec.kind, spec.mimeType)
-	if existing.Provider != "local" {
-		existing.Provider = "local"
-		existing.Endpoint = ""
-		existing.Bucket = ""
-		existing.StorageSettingID = ""
-		existing.ObjectKey = ObjectKey(userID, kind, spec.fileName, spec.mimeType, time.Now())
-	}
 	existing.Status = model.ResourceStatusPending
 	existing.Error = ""
 	existing.Width = spec.width
 	existing.Height = spec.height
 	existing.DurationMs = spec.durationMs
 	existing.UpdatedAt = time.Now()
-	etag, err := s.WriteObject(existing, spec.fileName, file)
+	etag, err := s.writeObject(ctx, existing, spec.fileName, file)
 	existing.UpdatedAt = time.Now()
 	if err != nil {
 		if heldQuota && s.quota != nil {
@@ -570,7 +583,7 @@ func (s *Service) stageOneDerivedSlot(
 	}, nil
 }
 
-func (s *Service) openLocalVideoSource(userID, resourceID string) (*model.Resource, string, func(), error) {
+func (s *Service) openLocalVideoSource(ctx context.Context, userID, resourceID string) (*model.Resource, string, func(), error) {
 	if s == nil || s.repo == nil {
 		return nil, "", nil, ResourceMissing()
 	}
@@ -584,17 +597,14 @@ func (s *Service) openLocalVideoSource(userID, resourceID string) (*model.Resour
 	if NormalizeKind(resource.Kind, resource.MimeType) != "video" {
 		return nil, "", nil, kernel.BadAuthRequest("仅支持从视频素材提取画面或分离音频")
 	}
-	if strings.TrimSpace(resource.Provider) != "local" || s.blobs == nil {
-		return nil, "", nil, kernel.NewAppError(kernel.CodeUnavailable, "资源不在本地存储中")
-	}
-	file, err := s.blobs.Open(resource.ObjectKey)
+	path, release, err := s.materialize(ctx, resource)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, "", nil, ResourceFileMissing()
 		}
 		return nil, "", nil, err
 	}
-	return resource, file.Name(), func() { _ = file.Close() }, nil
+	return resource, path, release, nil
 }
 
 func (s *Service) makeDeriveTempDir() (string, error) {

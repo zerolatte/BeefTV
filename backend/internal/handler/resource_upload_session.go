@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -20,7 +21,7 @@ type chunkedUploadService interface {
 	runtimePolicies
 	StartChunkedResourceUpload(userID string, req localasset.ChunkedUploadStart) (localasset.ChunkedUploadSessionInfo, error)
 	PutChunkedResourceUpload(userID string, uploadID string, index int, body io.Reader) error
-	CompleteChunkedResourceUpload(userID string, uploadID string) (*model.Resource, error)
+	CompleteChunkedResourceUploadContext(context.Context, string, string) (*model.Resource, error)
 }
 
 // RegisterChunkedUploadRoutes 注册本地媒体分片上传三条接口（POST 开始 / PUT 上传片 / POST 合并）。
@@ -89,7 +90,7 @@ func RegisterChunkedUploadRoutes(r *gin.RouterGroup, svc chunkedUploadService, h
 			failService(c, err)
 			return
 		}
-		resource, err := svc.CompleteChunkedResourceUpload(user.ID, c.Param("id"))
+		resource, err := svc.CompleteChunkedResourceUploadContext(c.Request.Context(), user.ID, c.Param("id"))
 		if err != nil {
 			failService(c, err)
 			return

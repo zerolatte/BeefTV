@@ -18,6 +18,7 @@ import (
 // Service owns probe, claim, ffmpeg, persist, range, and recovery for
 // local playback copies.
 type Service struct {
+	materialize    func(context.Context, string, string) (string, func(), error)
 	dataDir        string
 	store          Store
 	runner         Runner
@@ -45,6 +46,7 @@ func New(deps Deps) *Service {
 		ctx = context.Background()
 	}
 	return &Service{
+		materialize:    deps.Materialize,
 		dataDir:        deps.DataDir,
 		store:          deps.Store,
 		runner:         deps.Runner,
@@ -94,13 +96,17 @@ func (s *Service) maybeStart(resource *model.Resource, force bool) {
 	if s.Recover() != nil {
 		return
 	}
-	if resource.Provider != "local" || resource.Status != model.ResourceStatusReady {
-		if resource.Provider != "local" {
+	if (resource.Provider != "local" && s.materialize == nil) || resource.Status != model.ResourceStatusReady {
+		if resource.Provider != "local" && s.materialize == nil {
 			markNone(s.store, resource.ID, resource.PlaybackStatus)
 		}
 		return
 	}
 	if resource.PlaybackStatus != "" && resource.PlaybackStatus != model.PlaybackStatusNone {
+		return
+	}
+	if resource.Provider == "oss" {
+		s.launchRemote(resource, force)
 		return
 	}
 	if _, err := s.lookPath("ffmpeg"); err != nil {
@@ -239,7 +245,7 @@ func (s *Service) OpenRange(userID string, resourceID string) (*assets.ResourceS
 	if err != nil {
 		return nil, err
 	}
-	if resource == nil || resource.Status != model.ResourceStatusReady || resource.Provider != "local" ||
+	if resource == nil || resource.Status != model.ResourceStatusReady ||
 		resource.PlaybackStatus != model.PlaybackStatusReady || resource.PlaybackObjectKey == "" {
 		return nil, ErrNotReady
 	}

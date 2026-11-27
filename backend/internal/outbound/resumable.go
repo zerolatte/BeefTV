@@ -27,6 +27,8 @@ var ErrResumeRestart = errors.New("远程资源需要重新完整下载")
 // ResumableOptions configures DownloadResumable. There is deliberately no total
 // timeout here: the caller owns the overall delivery deadline through ctx.
 type ResumableOptions struct {
+	// ReturnFile 直接交付已经完成的磁盘文件，调用方负责关闭后释放文件及 sidecar。
+	ReturnFile    bool
 	PartialPath   string
 	Headers       http.Header
 	MaxBytes      int64
@@ -54,6 +56,8 @@ type ResumableProgress struct {
 // ResumableResult is a fully materialized artifact. Data is read from the .part
 // file only after the transfer completed, never accumulated during transfer.
 type ResumableResult struct {
+	FilePath string
+	Size     int64
 	Data     []byte
 	MimeType string
 	FileName string
@@ -347,6 +351,9 @@ func downloadResumableAttempt(ctx context.Context, parsed *url.URL, opts Resumab
 		return ResumableResult{}, true, io.ErrUnexpectedEOF
 	}
 
+	if opts.ReturnFile {
+		return completedResumableFile(opts.PartialPath, response.Header.Get("Content-Type"), parsed.Path, written)
+	}
 	data, err := os.ReadFile(opts.PartialPath)
 	if err != nil {
 		return ResumableResult{}, true, err

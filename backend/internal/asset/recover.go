@@ -37,6 +37,10 @@ type ArtifactRestore func() (RecoveredArtifact, error)
 // ResourceUploadMB. Status transitions stay inside this lock. RecoverOwned
 // must not call Store or RetryOwned.
 func (s *Service) RecoverOwned(userID, identity string, restore ArtifactRestore) (*model.Resource, error) {
+	return s.RecoverOwnedContext(context.Background(), userID, identity, restore)
+}
+
+func (s *Service) RecoverOwnedContext(ctx context.Context, userID, identity string, restore ArtifactRestore) (*model.Resource, error) {
 	if s == nil || s.repo == nil {
 		return nil, ResourceMissing()
 	}
@@ -64,17 +68,21 @@ func (s *Service) RecoverOwned(userID, identity string, restore ArtifactRestore)
 		return nil, err
 	}
 	if existing != nil {
-		return s.recoverExisting(existing, restore)
+		return s.recoverExisting(ctx, existing, restore)
 	}
-	return s.recoverCreate(userID, uploadKey, restore)
+	return s.recoverCreate(ctx, userID, uploadKey, restore)
 }
 
-func (s *Service) recoverExisting(resource *model.Resource, restore ArtifactRestore) (*model.Resource, error) {
-	if s.objectPresent(resource) {
+func (s *Service) recoverExisting(ctx context.Context, resource *model.Resource, restore ArtifactRestore) (*model.Resource, error) {
+	present, err := s.objectAvailable(ctx, resource)
+	if err != nil {
+		return nil, err
+	}
+	if present {
 		if resource.Status == model.ResourceStatusReady {
 			return resource, nil
 		}
-		return s.promoteReady(resource, s.generatedRetryReserve(resource))
+		return s.promoteReadyContext(ctx, resource, s.generatedRetryReserve(resource))
 	}
 	artifact, err := invokeArtifactRestore(restore)
 	if err != nil {
@@ -94,11 +102,15 @@ func (s *Service) recoverExisting(resource *model.Resource, restore ArtifactRest
 			if latestErr != nil {
 				return nil, latestErr
 			}
-			if latest.Status == model.ResourceStatusReady && s.objectPresent(latest) {
+			present, err := s.objectAvailable(ctx, latest)
+			if err != nil {
+				return nil, err
+			}
+			if latest.Status == model.ResourceStatusReady && present {
 				return latest, nil
 			}
-			if s.objectPresent(latest) {
-				return s.promoteReady(latest, s.generatedRetryReserve(latest))
+			if present {
+				return s.promoteReadyContext(ctx, latest, s.generatedRetryReserve(latest))
 			}
 			return nil, UploadInProgress()
 		}
@@ -109,10 +121,10 @@ func (s *Service) recoverExisting(resource *model.Resource, restore ArtifactRest
 	} else if incoming != model.ResourceStatusPending && incoming != model.ResourceStatusReady {
 		return nil, UploadInProgress()
 	}
-	return s.recoverWrite(resource, artifact, incoming, false)
+	return s.recoverWrite(ctx, resource, artifact, incoming, false)
 }
 
-func (s *Service) recoverCreate(userID string, uploadKey *string, restore ArtifactRestore) (*model.Resource, error) {
+func (s *Service) recoverCreate(ctx context.Context, userID string, uploadKey *string, restore ArtifactRestore) (*model.Resource, error) {
 	artifact, err := invokeArtifactRestore(restore)
 	if err != nil {
 		return nil, err
@@ -131,33 +143,30 @@ func (s *Service) recoverCreate(userID string, uploadKey *string, restore Artifa
 		Width: artifact.Width, Height: artifact.Height, DurationMs: artifact.DurationMs,
 		UploadKey: uploadKey, CreatedAt: now, UpdatedAt: now,
 	}
+	if err := s.selectStorage(&resource); err != nil {
+		s.finishQuota(userID, day, artifact.Size, nil, false, err, identity)
+		return nil, err
+	}
 	if err := s.repo.CreateResource(&resource); err != nil {
 		if existing, lookupErr := s.resourceForUploadKey(userID, uploadKey); lookupErr == nil && existing != nil {
 			s.finishQuota(userID, day, artifact.Size, nil, false, err, identity)
-			return s.recoverExisting(existing, func() (RecoveredArtifact, error) {
+			return s.recoverExisting(ctx, existing, func() (RecoveredArtifact, error) {
 				return artifact, nil
 			})
 		}
 		s.finishQuota(userID, day, artifact.Size, nil, false, err, identity)
 		return nil, err
 	}
-	written, err := s.recoverWrite(&resource, artifact, model.ResourceStatusPending, true)
+	written, err := s.recoverWrite(ctx, &resource, artifact, model.ResourceStatusPending, true)
 	s.finishQuota(userID, day, artifact.Size, written, true, err, identity)
 	return written, err
 }
 
-func (s *Service) recoverWrite(resource *model.Resource, artifact RecoveredArtifact, incoming model.ResourceStatus, alreadyReserved bool) (*model.Resource, error) {
+func (s *Service) recoverWrite(ctx context.Context, resource *model.Resource, artifact RecoveredArtifact, incoming model.ResourceStatus, alreadyReserved bool) (*model.Resource, error) {
 	if resource == nil {
 		return nil, ResourceMissing()
 	}
 	kind := NormalizeKind(artifact.Kind, artifact.MimeType)
-	if resource.Provider != "local" {
-		resource.Provider = "local"
-		resource.Endpoint = ""
-		resource.Bucket = ""
-		resource.StorageSettingID = ""
-		resource.ObjectKey = ObjectKey(resource.UserID, kind, artifact.FileName, artifact.MimeType, time.Now())
-	}
 	claimedFailed := incoming == model.ResourceStatusFailed
 	alreadyConsumed := incoming == model.ResourceStatusReady
 	if !alreadyConsumed {
@@ -182,7 +191,7 @@ func (s *Service) recoverWrite(resource *model.Resource, artifact RecoveredArtif
 			return resource, err
 		}
 	}
-	etag, err := s.WriteObject(resource, artifact.FileName, artifact.Body)
+	etag, err := s.writeObject(ctx, resource, artifact.FileName, artifact.Body)
 	resource.UpdatedAt = time.Now()
 	if err != nil {
 		if alreadyConsumed {
@@ -200,14 +209,17 @@ func (s *Service) recoverWrite(resource *model.Resource, artifact RecoveredArtif
 	applyRecoveredMetadata(resource, artifact, kind)
 	resource.ETag = etag
 	if alreadyConsumed {
-		_ = s.probeMediaMetadata(context.Background(), resource)
+		_ = s.probeMediaMetadata(ctx, resource)
+		if err := ctx.Err(); err != nil {
+			return resource, err
+		}
 		resource.Status = model.ResourceStatusReady
 		resource.Error = ""
 		if err := s.repo.SaveResource(resource); err != nil {
 			// Leave the original READY row; do not persist PENDING.
 			return resource, fmt.Errorf("保存资源就绪状态失败：%w", err)
 		}
-	} else if err := s.finalizeReady(resource); err != nil {
+	} else if err := s.finalizeReadyContext(ctx, resource); err != nil {
 		return resource, err
 	}
 	s.commitQuota(resource)
@@ -225,7 +237,7 @@ func (s *Service) generatedRetryReserve(resource *model.Resource) func() (string
 	}
 }
 
-func (s *Service) promoteReady(resource *model.Resource, reserve func() (string, error)) (*model.Resource, error) {
+func (s *Service) promoteReadyContext(ctx context.Context, resource *model.Resource, reserve func() (string, error)) (*model.Resource, error) {
 	if resource == nil {
 		return nil, ResourceMissing()
 	}
@@ -234,7 +246,10 @@ func (s *Service) promoteReady(resource *model.Resource, reserve func() (string,
 		return resource, err
 	}
 	resource.UpdatedAt = time.Now()
-	if err := s.finalizeReady(resource); err != nil {
+	if err := s.resumeStored(ctx, resource); err != nil {
+		return resource, err
+	}
+	if err := s.finalizeReadyContext(ctx, resource); err != nil {
 		return resource, err
 	}
 	s.commitQuota(resource)
@@ -260,13 +275,6 @@ func applyRecoveredMetadata(resource *model.Resource, artifact RecoveredArtifact
 	if artifact.DurationMs > 0 {
 		resource.DurationMs = artifact.DurationMs
 	}
-}
-
-func (s *Service) objectPresent(resource *model.Resource) bool {
-	if s == nil || s.blobs == nil || resource == nil || strings.TrimSpace(resource.ObjectKey) == "" {
-		return false
-	}
-	return s.blobs.Exists(resource.ObjectKey) == nil
 }
 
 func invokeArtifactRestore(restore ArtifactRestore) (RecoveredArtifact, error) {

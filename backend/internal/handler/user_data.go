@@ -207,7 +207,7 @@ func registerUserDataRoutes(r *gin.RouterGroup, owners workspaceOwners, canvasDa
 		width, _ := strconv.Atoi(c.PostForm("width"))
 		height, _ := strconv.Atoi(c.PostForm("height"))
 		durationMs, _ := strconv.ParseInt(c.PostForm("durationMs"), 10, 64)
-		resource, err := requestAssetPort(c, workflows).UploadLocalResource(user.ID, file, c.PostForm("kind"), width, height, durationMs, c.GetHeader("X-Idempotency-Key"))
+		resource, err := resources.UploadContext(c.Request.Context(), user.ID, file, c.PostForm("kind"), width, height, durationMs, c.GetHeader("X-Idempotency-Key"))
 		if err != nil {
 			failService(c, err)
 			return
@@ -282,7 +282,7 @@ func registerUserDataRoutes(r *gin.RouterGroup, owners workspaceOwners, canvasDa
 		etag := resourceResponseETag(resource)
 		// variant=playback：serve 浏览器兼容播放副本（H.265→H.264 转码）。
 		// 副本就绪时用独立 ETag 后缀，避免浏览器拿原件缓存命中 304 而继续黑屏。
-		usePlayback := c.Query("variant") == "playback" && resource.Provider == "local" &&
+		usePlayback := c.Query("variant") == "playback" &&
 			resource.PlaybackStatus == model.PlaybackStatusReady && resource.PlaybackObjectKey != ""
 		var stream *assets.ResourceStream
 		if usePlayback {
@@ -306,7 +306,7 @@ func registerUserDataRoutes(r *gin.RouterGroup, owners workspaceOwners, canvasDa
 			rangeHeader = ""
 		}
 		if stream == nil {
-			stream, err = resources.OpenRange(user.ID, resource.ID, rangeHeader)
+			stream, err = resources.OpenRangeContext(c.Request.Context(), user.ID, resource.ID, rangeHeader)
 			if err != nil {
 				failService(c, err)
 				return

@@ -64,7 +64,9 @@ func (w *taskWorkerCoordinator) executeClaimed(session taskruntime.Session) task
 			res, err := s.routeExecutor().execute(ctx, task, attempt)
 			return localtask.RouteExecutionResult{Result: res.result, CanvasOps: res.canvasOps, Err: res.err, ProviderSucceeded: res.providerSucceeded}, err
 		},
-		PersistGeneratedMedia: s.persistTaskGeneratedMediaResult,
+		PersistGeneratedMedia: func(ctx context.Context, task model.Task, result map[string]interface{}) (map[string]interface{}, error) {
+			return s.persistTaskGeneratedMediaResult(task, result, ctx)
+		},
 		FinalizeTurnaround:    s.finalizeCharacterTurnaroundTask,
 		DecryptTaskInput:      s.decryptTaskInputJSON,
 		ShouldDeferImage:      s.shouldDeferImageRecovery,

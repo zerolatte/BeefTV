@@ -178,7 +178,7 @@ func (w replacementMedia) prepareReplacement(task *model.Task, ctx context.Conte
 		path := filepath.Join(dir, fmt.Sprintf("segment-%d.mp4", i))
 		var file *os.File
 		padSeconds := max(2, (segment.ReferenceFrames+fps-1)/fps)
-		resource, e := w.resources.RecoverOwned(task.UserID, fmt.Sprintf("%s:segment:%d", task.ID, i), func() (localasset.RecoveredArtifact, error) {
+		resource, e := w.resources.RecoverOwnedContext(ctx, task.UserID, fmt.Sprintf("%s:segment:%d", task.ID, i), func() (localasset.RecoveredArtifact, error) {
 			filter := fmt.Sprintf("trim=start_frame=%d:end_frame=%d,setpts=PTS-STARTPTS,scale=%d:%d,tpad=stop_mode=clone:stop_duration=%d,trim=end_frame=%d", segment.ReferenceStartFrame, segment.ReferenceEndFrame, rw, rh, padSeconds, segment.ReferenceFrames)
 			args := []string{"-v", "error", "-nostdin", "-y", "-i", normalized, "-an", "-vf", filter}
 			args = append(args, encoder...)
@@ -236,7 +236,7 @@ func (w replacementMedia) finishReplacement(task *model.Task, ctx context.Contex
 			os.RemoveAll(dir)
 		}
 	}()
-	resource, err := w.resources.RecoverOwned(task.UserID, task.ID+":0", func() (localasset.RecoveredArtifact, error) {
+	resource, err := w.resources.RecoverOwnedContext(ctx, task.UserID, task.ID+":0", func() (localasset.RecoveredArtifact, error) {
 		bin, e := mediatools.ResolveFFmpeg()
 		if e != nil {
 			return localasset.RecoveredArtifact{}, e

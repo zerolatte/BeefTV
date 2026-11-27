@@ -2,10 +2,12 @@ package taskdelivery
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"strings"
 
 	"infinite-canvas/backend/internal/asset"
+	"infinite-canvas/backend/internal/kernel"
 	"infinite-canvas/backend/internal/model"
 )
 
@@ -18,6 +20,10 @@ func NewAssetInlineStore(assets *asset.Service) InlineStore {
 }
 
 func (s assetInlineStore) PersistInline(userID string, artifact InlineArtifact) (*model.Resource, error) {
+	ctx := artifact.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if s.assets == nil {
 		return nil, asset.ResourceMissing()
 	}
@@ -26,13 +32,13 @@ func (s assetInlineStore) PersistInline(userID string, artifact InlineArtifact) 
 		return nil, err
 	}
 	if !artifact.EnforceQuota {
-		resource, _, err := s.assets.Store(userID, artifact.Kind, artifact.FileName, artifact.MimeType, artifact.Size, artifact.Width, artifact.Height, artifact.DurationMs, bytes.NewReader(data), nil)
+		resource, _, err := s.assets.StoreContext(ctx, userID, artifact.Kind, artifact.FileName, artifact.MimeType, artifact.Size, artifact.Width, artifact.Height, artifact.DurationMs, bytes.NewReader(data), nil)
 		return resource, err
 	}
 	if strings.TrimSpace(artifact.Identity) == "" {
-		return s.assets.StoreGenerated(userID, artifact.Kind, artifact.FileName, artifact.MimeType, artifact.Size, artifact.Width, artifact.Height, artifact.DurationMs, bytes.NewReader(data))
+		artifact.Identity = kernel.NewID()
 	}
-	return s.assets.RecoverOwned(userID, artifact.Identity, func() (asset.RecoveredArtifact, error) {
+	return s.assets.RecoverOwnedContext(ctx, userID, artifact.Identity, func() (asset.RecoveredArtifact, error) {
 		return asset.RecoveredArtifact{
 			Kind:       artifact.Kind,
 			FileName:   artifact.FileName,

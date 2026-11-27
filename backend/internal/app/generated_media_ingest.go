@@ -7,9 +7,13 @@ import (
 	"infinite-canvas/backend/internal/taskdelivery"
 )
 
-func (s *Service) persistTaskGeneratedMediaResult(task model.Task, result map[string]interface{}) (map[string]interface{}, error) {
-	return taskdelivery.PersistTaskGeneratedMediaResult(s.generatedMediaIngestor(), task, result, func(t model.Task) func(string) {
-		_, finish := s.SupportTrace().Start(taskSupportContext(context.Background(), t), "generation.persist", taskSupportFields(t))
+func (s *Service) persistTaskGeneratedMediaResult(task model.Task, result map[string]interface{}, contexts ...context.Context) (map[string]interface{}, error) {
+	ctx := context.Background()
+	if len(contexts) > 0 {
+		ctx = contexts[0]
+	}
+	return taskdelivery.PersistTaskGeneratedMediaResult(ctx, s.generatedMediaIngestor(), task, result, func(t model.Task) func(string) {
+		_, finish := s.SupportTrace().Start(taskSupportContext(ctx, t), "generation.persist", taskSupportFields(t))
 		return finish
 	}, supportFailureReason)
 }

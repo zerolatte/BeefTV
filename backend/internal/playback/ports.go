@@ -42,6 +42,7 @@ type Runner interface {
 // Context is the runtime-owned cancellation scope for transcodes and for
 // refusing new claims during Stop. Lead injects worker.Context().
 type Deps struct {
+	Materialize    func(context.Context, string, string) (string, func(), error)
 	DataDir        string
 	Store          Store
 	Runner         Runner

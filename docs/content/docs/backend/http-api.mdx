@@ -8,7 +8,21 @@ title: 本地 HTTP API
 
 `GET /api/workspace/bootstrap` 返回 `profile: platform` 与按实例、用户隔离的命名空间。`GET /api/workspace/model-config` 为脱敏只读目录。`POST /api/tasks/quote` 接收生成请求并返回报价，`POST /api/tasks` 必须带 `quoteId`；重放同一提交返回原任务。`GET /api/credits` 返回可用及冻结积分，`GET /api/credits/ledger` 返回分页流水。
 
-管理员接口位于 `/api/admin/accounts`、`/api/admin/channels`、`/api/admin/prices` 和 `/api/admin/usage`，服务层重新检查权限。没有公开注册、助手、用户渠道写入、任意模型代理与外部 Agent 路由。错误继续使用 HTTP 状态及 `{ code, data, msg, reason }` 信封；例如 `insufficient_credits`、`quote_expired`、`model_changed`、`price_changed`。详细流程见[多用户平台](platform.mdx)。
+管理员接口位于 `/api/admin/accounts`、`/api/admin/channels`、`/api/admin/prices`、`/api/admin/usage` 和 `/api/admin/storage`，服务层重新检查权限。没有公开注册、助手、用户渠道写入、任意模型代理与外部 Agent 路由。错误继续使用 HTTP 状态及 `{ code, data, msg, reason }` 信封；例如 `insufficient_credits`、`quote_expired`、`model_changed`、`price_changed`。详细流程见[多用户平台](platform.mdx)。
+
+## 平台文件存储
+
+| 接口 | 请求及响应 |
+| --- | --- |
+| `GET /api/admin/storage` | 返回 `{ provider, version, oss, statistics, recentFallbacks }`；默认 `provider=local`、`version=0` |
+| `POST /api/admin/storage/probe` | `{ oss?: OSSDraft }`；省略 `oss` 使用已保存连接，返回 `{ elapsedMs, message }`，不修改配置 |
+| `PUT /api/admin/storage` | `{ provider: "local" \| "oss", expectedVersion, oss?: OSSDraft }`；返回最新公开配置，版本冲突为 HTTP 409、`storage_version_conflict` |
+
+`OSSDraft` 包含 `endpoint`、`region`、`bucket`、`accessKeyId` 和 `accessKeySecret`。两个密钥留空保留已存值；更换 ID 必须同时提供 Secret。公开 `oss` 只包含端点、区域、Bucket、`hasAccessKeyId` 与 `hasAccessKeySecret`，不回显密钥。`statistics` 每项为 `{ provider, count, bytes }`，只统计实际位置上的就绪资源；`recentFallbacks` 每项为 `{ resourceId, reason, createdAt }`，最多返回最近 10 条洗敏事件。
+
+测试最多 25 秒，验证随机测试文件的写入、读取内容与删除。失败原因包括 `storage_permission`、`storage_timeout`、`storage_rate_limited`、`storage_network`、`storage_upstream`、`storage_integrity` 和 `storage_cleanup`；取消保持 `request_cancelled`。`DeleteObject` 返回 403 `AccessDenied` 时为 `storage_delete_permission`，提示检查目标桶对象上的 `oss:DeleteObject` 授权及显式拒绝；远端删除完成但本地清理记录更新失败时为 `storage_cleanup_record`，不误报为权限不足。修改 OSS 配置或启用 OSS 时，保存接口必须重新验证后才执行配置、位置与审计事务；切回本地且未提交 OSS 草稿时不访问 OSS。
+
+平台 `POST /api/resources/import` 接收 `{ url, kind, width?, height?, durationMs? }` 和可选 `X-Idempotency-Key`，经过服务端出站保护与配额校验后流式导入，返回 `{ resource }`。普通上传、分片完成、生成及派生媒体统一采用当前保存策略。`GET /api/resources/:id/file` 按资源原位置鉴权代理，支持单段 Range；OSS 网络异常不作为文件缺失返回。存储生命周期见[文件存储](resource-storage.mdx)。
 
 平台画布保存使用 `POST /api/ops/canvas.document.commit`，请求体为 `{ opId, params: { canvasId, expectedRevision, document } }`。会话决定账号身份，服务端校验画布归属；文档与幂等回执同事务提交。同一 `opId` 和内容重试返回原回执，旧版本提交返回 `409 / stale_revision`。`POST /api/ops/canvas.task.bind` 复用相同账号校验，将已交付任务结果绑定到原节点；不会创建生成任务。`GET /api/ops/external-writes?canvasId=...` 只返回当前账号的画布外部改动记录。其他操作层与外部客户端入口不在平台开放。
 
