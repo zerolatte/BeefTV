@@ -11,6 +11,7 @@ import (
 	"infinite-canvas/backend/internal/platformadmin"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 func platformPage(c *gin.Context) (int, int) {
@@ -32,6 +33,15 @@ func platformResult(c *gin.Context, value any, err error) {
 		return
 	}
 	ok(c, value)
+}
+
+func platformCatalogBind(c *gin.Context, value any) bool {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
+	if err := c.ShouldBindJSON(value); err != nil {
+		failService(c, kernel.BadAuthRequest("模型配置字段或类型无效；请检查高级配置中的字段名称、规格字符串和积分整数"))
+		return false
+	}
+	return true
 }
 
 func RegisterPlatformAdmin(api *gin.RouterGroup, auth *identity.Service, billing *credits.Service, catalog *platformadmin.Service) {
@@ -90,11 +100,22 @@ func RegisterPlatformAdmin(api *gin.RouterGroup, auth *identity.Service, billing
 		platformResult(c, value, err)
 	})
 	r.PUT("/prices", func(c *gin.Context) {
-		var req model.ModelCreditPrice
+		var req credits.PriceRequest
 		if !platformBind(c, &req) {
 			return
 		}
-		platformResult(c, gin.H{"saved": true}, billing.SetPrice(platformAccount(c).ID, req))
+		_, err := billing.SetPrices(platformAccount(c).ID, []credits.PriceRequest{req})
+		platformResult(c, gin.H{"saved": true}, err)
+	})
+	r.POST("/prices/batch", func(c *gin.Context) {
+		var req struct {
+			Prices []credits.PriceRequest `json:"prices"`
+		}
+		if !platformBind(c, &req) {
+			return
+		}
+		value, err := billing.SetPrices(platformAccount(c).ID, req.Prices)
+		platformResult(c, gin.H{"items": value}, err)
 	})
 	r.GET("/usage", func(c *gin.Context) {
 		p, n := platformPage(c)
@@ -112,13 +133,37 @@ func RegisterPlatformAdmin(api *gin.RouterGroup, auth *identity.Service, billing
 		platformResult(c, gin.H{"saved": true}, billing.Resolve(platformAccount(c).ID, c.Param("id"), req.Reason, req.Units))
 	})
 	r.GET("/channels", func(c *gin.Context) {
-		p, n := platformPage(c)
-		value, err := catalog.Channels(platformAccount(c).ID, admin.ListQuery{Page: p, Limit: n, Keyword: c.Query("q")})
+		p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		n, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
+		value, err := catalog.Channels(platformAccount(c).ID, admin.ListQuery{Page: p, Limit: n, Keyword: c.Query("q"), Status: c.Query("status")})
+		platformResult(c, value, err)
+	})
+	r.GET("/protocols", func(c *gin.Context) {
+		value, err := catalog.Protocols(platformAccount(c).ID, c.Query("capability"))
+		platformResult(c, gin.H{"providers": value}, err)
+	})
+	r.POST("/model-capabilities", func(c *gin.Context) {
+		var req modelcatalog.ModelCapabilityDraft
+		if !platformBind(c, &req) {
+			return
+		}
+		value, err := catalog.Capability(platformAccount(c).ID, req)
+		platformResult(c, value, err)
+	})
+	r.POST("/channels/probe", func(c *gin.Context) {
+		if !enforceRateLimit(c, "platform-channel-probe:"+platformAccount(c).ID, 30, time.Minute) {
+			return
+		}
+		var req platformadmin.ProbeRequest
+		if !platformBind(c, &req) {
+			return
+		}
+		value, err := catalog.Probe(c.Request.Context(), platformAccount(c).ID, req)
 		platformResult(c, value, err)
 	})
 	saveChannel := func(c *gin.Context) {
-		var req modelcatalog.ChannelRequest
-		if !platformBind(c, &req) {
+		var req platformadmin.ChannelRequest
+		if !platformCatalogBind(c, &req) {
 			return
 		}
 		value, err := catalog.SaveChannel(platformAccount(c).ID, c.Param("channelId"), req)
@@ -126,13 +171,22 @@ func RegisterPlatformAdmin(api *gin.RouterGroup, auth *identity.Service, billing
 	}
 	r.POST("/channels", saveChannel)
 	r.PUT("/channels/:channelId", saveChannel)
+	r.DELETE("/channels/:channelId", func(c *gin.Context) {
+		platformResult(c, gin.H{"deleted": true}, catalog.DeleteChannel(platformAccount(c).ID, c.Param("channelId")))
+	})
 	r.GET("/channels/:channelId/models", func(c *gin.Context) {
-		value, err := catalog.Models(platformAccount(c).ID, c.Param("channelId"))
+		p, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+		n, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+		status := c.Query("status")
+		if status == "" {
+			status = c.Query("readiness")
+		}
+		value, err := catalog.Models(platformAccount(c).ID, c.Param("channelId"), platformadmin.ModelQuery{Page: p, PageSize: n, Keyword: c.Query("q"), Capability: c.Query("capability"), Status: status})
 		platformResult(c, value, err)
 	})
 	saveModel := func(c *gin.Context) {
-		var req modelcatalog.ChannelModelRequest
-		if !platformBind(c, &req) {
+		var req platformadmin.ModelRequest
+		if !platformCatalogBind(c, &req) {
 			return
 		}
 		value, err := catalog.SaveModel(platformAccount(c).ID, c.Param("channelId"), c.Param("id"), req)
@@ -140,14 +194,25 @@ func RegisterPlatformAdmin(api *gin.RouterGroup, auth *identity.Service, billing
 	}
 	r.POST("/channels/:channelId/models", saveModel)
 	r.PUT("/channels/:channelId/models/:id", saveModel)
+	r.POST("/channels/:channelId/models/batch", func(c *gin.Context) {
+		var req struct {
+			Models []platformadmin.ModelRequest `json:"models"`
+		}
+		if !platformCatalogBind(c, &req) {
+			return
+		}
+		value, err := catalog.SaveModels(platformAccount(c).ID, c.Param("channelId"), req.Models)
+		platformResult(c, gin.H{"items": value}, err)
+	})
 	r.POST("/channels/:channelId/import", func(c *gin.Context) {
 		var req struct {
-			Models []string `json:"models"`
+			Models        []string `json:"models"`
+			CatalogFormat string   `json:"catalogFormat"`
 		}
 		if !platformBind(c, &req) {
 			return
 		}
-		value, err := catalog.ImportModels(c.Request.Context(), platformAccount(c).ID, c.Param("channelId"), req.Models)
+		value, err := catalog.ImportModels(c.Request.Context(), platformAccount(c).ID, c.Param("channelId"), req.Models, req.CatalogFormat)
 		platformResult(c, value, err)
 	})
 }

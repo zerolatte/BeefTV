@@ -36,16 +36,19 @@ type Props = {
     model?: string;
     disabled?: boolean;
     section?: "all" | "protocol" | "references";
+    /** 平台管理传入服务端默认值，避免在浏览器按模型名称补齐能力。 */
+    serverDefaults?: ModelCapabilityConfig;
 };
 
-export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", disabled = false, section = "all" }: Props) {
+export function ModelCapabilityEditor({ value, onChange, protocol, capability = "video", model = "", disabled = false, section = "all", serverDefaults }: Props) {
+    if (serverDefaults && !serverDefaults[capability]) return null;
     if (capability === "text") {
-        return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} section={section} />;
+        return <TextCapabilityEditor value={value} onChange={onChange} protocol={protocol} disabled={disabled} section={section} serverDefaults={serverDefaults} />;
     }
     if (capability === "image") {
-        return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} section={section} />;
+        return <ImageCapabilityEditor value={value} onChange={onChange} protocol={protocol} model={model} disabled={disabled} section={section} serverDefaults={serverDefaults} />;
     }
-    const defaults = defaultModelCapabilityConfig(protocol, model).video!;
+    const defaults = (serverDefaults || defaultModelCapabilityConfig(protocol, model)).video!;
     const profile = normalizeModelCapabilityConfig(value || { version: 1, video: defaults }).video!;
     const update = (patch: Partial<VideoCapabilityConfig>) => onChange?.({ version: 1, video: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<VideoCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
@@ -376,8 +379,8 @@ function VideoPromptLimitFields({ references, defaults, disabled, onChange }: {
     </div>;
 }
 
-function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: Pick<Props, "value" | "onChange" | "protocol" | "disabled" | "section">) {
-    const profile = value?.text || defaultModelCapabilityConfig(protocol).text!;
+function TextCapabilityEditor({ value, onChange, protocol, disabled, section, serverDefaults }: Pick<Props, "value" | "onChange" | "protocol" | "disabled" | "section" | "serverDefaults">) {
+    const profile = value?.text || serverDefaults?.text || defaultModelCapabilityConfig(protocol).text!;
     const update = (patch: Partial<TextCapabilityConfig>) => {
         onChange?.({ version: 1, text: { ...profile, ...patch } });
     };
@@ -440,8 +443,8 @@ function TextCapabilityEditor({ value, onChange, protocol, disabled, section }: 
     );
 }
 
-function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, section }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol" | "section">) {
-    const profile = normalizeModelCapabilityConfig(value || { version: 1, image: defaultImageCapabilityConfig(protocol, model) }).image!;
+function ImageCapabilityEditor({ value, onChange, protocol, model, disabled, section, serverDefaults }: Required<Pick<Props, "model" | "disabled">> & Pick<Props, "value" | "onChange" | "protocol" | "section" | "serverDefaults">) {
+    const profile = normalizeModelCapabilityConfig(value || serverDefaults || { version: 1, image: defaultImageCapabilityConfig(protocol, model) }).image!;
     const update = (patch: Partial<ImageCapabilityConfig>) => onChange?.({ version: 1, image: { ...profile, ...patch } });
     const updateReferences = (patch: Partial<ImageCapabilityConfig["references"]>) => update({ references: { ...profile.references, ...patch } });
     const updateSize = (patch: Partial<ImageCapabilityConfig["size"]>) => update({ size: { ...profile.size, ...patch } });

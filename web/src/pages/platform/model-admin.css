@@ -1,0 +1,473 @@
+/* 平台模型管理仅拥有本页面与对应抽屉的布局。 */
+.platform-model-admin {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+    flex-direction: column;
+}
+.platform-channel-delete-dialog .platform-channel-delete-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow-wrap: anywhere;
+    color: var(--user-ink);
+}
+.platform-channel-delete-dialog .platform-channel-delete-content p {
+    margin: 0;
+    color: var(--user-ink);
+    font-size: 14px;
+    line-height: 22px;
+}
+.platform-model-admin .platform-model-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.platform-model-admin .platform-model-toolbar > .ant-input-search {
+    flex: 1;
+    min-width: 180px;
+    width: auto;
+}
+.platform-model-admin .platform-model-toolbar > .ant-select {
+    min-width: 140px;
+}
+.platform-model-admin .platform-channel-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.platform-model-admin .platform-channel-card {
+    min-width: 0;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-card);
+    background: var(--user-surface);
+    overflow: hidden;
+}
+.platform-model-admin .platform-channel-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+}
+.platform-model-admin .platform-channel-heading {
+    display: flex;
+    flex: 1;
+    min-width: min(100%, 180px);
+    align-items: center;
+    gap: 12px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink);
+    text-align: left;
+    cursor: pointer;
+}
+.platform-model-admin .platform-channel-heading > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+.platform-model-admin .platform-channel-heading strong {
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: 500;
+}
+.platform-model-admin .platform-channel-heading small {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+.platform-model-admin .platform-channel-heading > svg {
+    flex: none;
+    transform: rotate(-90deg);
+    transition: transform var(--user-motion);
+}
+.platform-model-admin .platform-channel-heading > svg.is-expanded {
+    transform: rotate(0);
+}
+.platform-model-admin .platform-channel-heading:focus-visible {
+    outline: 2px solid var(--user-focus);
+    outline-offset: 6px;
+    border-radius: var(--user-radius-control);
+}
+.platform-model-admin .platform-channel-counts {
+    display: flex;
+    gap: 12px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+    font-variant-numeric: tabular-nums;
+}
+.platform-model-admin .platform-channel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+}
+.platform-model-admin .platform-channel-models {
+    min-width: 0;
+    border-top: 1px solid var(--user-border);
+    padding: 20px;
+}
+.platform-model-admin .platform-channel-models .platform-model-toolbar {
+    margin-bottom: 16px;
+}
+.platform-model-admin .platform-probe-notice {
+    margin: 0;
+    padding: 0 20px 16px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 20px;
+}
+.platform-model-admin .platform-channel-card > .ant-alert {
+    margin: 0 20px 16px;
+}
+.platform-model-admin .platform-model-pending {
+    display: grid;
+    min-height: 160px;
+    place-items: center;
+}
+.platform-model-admin .platform-model-table .ant-table {
+    background: var(--user-surface);
+    font-size: 13px;
+    line-height: 22px;
+}
+.platform-model-admin .platform-model-table .ant-table-thead > tr > th {
+    background: var(--user-surface-muted);
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+.platform-model-admin .platform-model-table .ant-table-tbody > tr > td {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+}
+.platform-model-admin .platform-model-name {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 260px;
+}
+.platform-model-admin .platform-model-name strong {
+    font-size: 14px;
+    font-weight: 500;
+}
+.platform-model-admin .platform-model-name small {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+.platform-model-admin .platform-model-readiness {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: var(--user-ink);
+}
+.platform-model-admin .platform-model-readiness small {
+    max-width: 240px;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+.platform-model-admin .platform-model-prices {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 100px;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    line-height: 18px;
+}
+.platform-model-admin .platform-mobile-models {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.platform-model-admin .platform-mobile-model {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 16px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-control);
+}
+.platform-model-admin .platform-mobile-model-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+.platform-model-admin .platform-mobile-model p {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+.platform-model-drawer .ant-drawer-header {
+    border-bottom: 1px solid var(--user-border);
+    padding: 20px 24px;
+}
+.platform-model-drawer .ant-drawer-title {
+    font-size: 16px;
+    line-height: 22px;
+    font-weight: 500;
+    color: var(--user-ink);
+}
+.platform-model-drawer .ant-drawer-body {
+    background: var(--user-page-bg);
+}
+.platform-model-drawer .ant-drawer-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--user-border);
+    background: var(--user-surface);
+}
+.platform-model-drawer .platform-model-drawer-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 24px;
+    min-width: 0;
+    color: var(--user-ink);
+}
+.platform-model-drawer .platform-model-drawer-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+}
+.platform-model-drawer .platform-model-drawer-footer > span {
+    flex: 1;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+}
+.platform-model-drawer .platform-model-section {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 16px;
+}
+.platform-model-drawer .platform-model-section > h3,
+.platform-model-drawer .platform-model-section-heading h3,
+.platform-model-drawer .platform-variant-row h3 {
+    margin: 0;
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: 500;
+}
+.platform-model-drawer .platform-model-section > p,
+.platform-model-drawer .platform-model-muted,
+.platform-model-drawer .platform-model-json p {
+    margin: 0;
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 20px;
+    overflow-wrap: anywhere;
+}
+.platform-model-drawer .platform-model-field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+.platform-model-drawer .platform-model-field-grid label,
+.platform-model-drawer .platform-model-json label {
+    display: flex;
+    min-width: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    color: var(--user-ink);
+    font-size: 12px;
+    line-height: 18px;
+    font-weight: 500;
+}
+.platform-model-drawer .platform-model-field-grid :is(.ant-select, .ant-input-number) {
+    width: 100%;
+}
+.platform-model-drawer .platform-model-field-wide {
+    grid-column: 1 / -1;
+}
+.platform-model-drawer .platform-model-inline,
+.platform-model-drawer .platform-model-editor-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 20px;
+}
+.platform-model-drawer .platform-model-inline > .ant-select {
+    min-width: 160px;
+    max-width: 100%;
+}
+.platform-model-drawer .platform-model-editor-tools > .ant-btn {
+    margin-left: auto;
+}
+.platform-model-drawer .platform-model-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+.platform-model-drawer .platform-model-section-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.platform-model-drawer .platform-model-section-heading > span {
+    font-size: 12px;
+    line-height: 18px;
+    color: var(--user-ink-muted);
+}
+.platform-model-drawer .platform-catalog-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface);
+}
+.platform-model-drawer .platform-catalog-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--user-border);
+    font-size: 12px;
+    line-height: 18px;
+    cursor: pointer;
+}
+.platform-model-drawer .platform-catalog-row:last-child {
+    border-bottom: 0;
+}
+.platform-model-drawer .platform-catalog-row > span:nth-of-type(2) {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+}
+.platform-model-drawer .platform-catalog-row strong {
+    font-size: 14px;
+    line-height: 22px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.platform-model-drawer .platform-catalog-row small {
+    color: var(--user-ink-muted);
+    font-size: 12px;
+    line-height: 18px;
+    overflow-wrap: anywhere;
+}
+.platform-model-drawer .platform-draft-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.platform-model-drawer .platform-draft-tab {
+    display: flex;
+    min-width: 0;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface);
+    overflow: hidden;
+}
+.platform-model-drawer .platform-draft-tab > button[aria-pressed] {
+    min-width: 0;
+    max-width: 300px;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    color: var(--user-ink-muted);
+    font-size: 13px;
+    line-height: 20px;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+.platform-model-drawer .platform-draft-tab > .ant-checkbox-wrapper {
+    margin-left: 12px;
+    align-self: center;
+}
+.platform-model-drawer .platform-draft-tab > button[aria-pressed="true"] {
+    color: var(--user-selected-ink);
+    background: var(--user-selected-bg);
+}
+.platform-model-drawer .platform-draft-tab > button:focus-visible {
+    outline: 2px solid var(--user-focus);
+    outline-offset: -2px;
+}
+.platform-model-drawer .platform-variant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.platform-model-drawer .platform-variant-row {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    border: 1px solid var(--user-border);
+    border-radius: var(--user-radius-control);
+    background: var(--user-surface);
+}
+.platform-model-drawer .platform-variant-selectors {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+.platform-model-drawer .platform-selector-pair {
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 8px;
+}
+.platform-model-drawer .platform-model-json {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.platform-model-drawer .platform-model-json textarea {
+    font: 400 12px/20px var(--font-mono);
+}
+@media (max-width: 720px) {
+    .platform-model-admin .platform-channel-header {
+        padding: 16px;
+        gap: 12px;
+    }
+    .platform-model-admin .platform-channel-heading {
+        flex-basis: 100%;
+    }
+    .platform-model-admin .platform-channel-actions {
+        width: 100%;
+    }
+    .platform-model-admin .platform-channel-models {
+        padding: 16px;
+    }
+    .platform-model-admin .platform-model-toolbar > .ant-input-search {
+        flex-basis: 100%;
+    }
+    .platform-model-drawer .platform-model-drawer-content {
+        padding: 20px;
+    }
+    .platform-model-drawer .platform-model-field-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .platform-model-drawer .platform-model-drawer-footer > span {
+        flex-basis: 100%;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .platform-model-admin .platform-channel-heading > svg {
+        transition: none;
+    }
+}

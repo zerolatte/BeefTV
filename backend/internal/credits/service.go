@@ -19,14 +19,19 @@ import (
 
 // Service 统一模型发布、报价、生成准入与积分账本策略。
 type Service struct {
-	repo     *repository.Repository
-	identity *identity.Service
-	tasks    *task.Service
-	policy   func() (platform.RuntimePolicySetting, error)
+	repo             *repository.Repository
+	identity         *identity.Service
+	tasks            *task.Service
+	policy           func() (platform.RuntimePolicySetting, error)
+	catalogProtocols func() map[string][]string
 }
 
 func New(repo *repository.Repository, identities *identity.Service, tasks *task.Service, policy func() (platform.RuntimePolicySetting, error)) *Service {
 	return &Service{repo: repo, identity: identities, tasks: tasks, policy: policy}
+}
+
+func (s *Service) ConfigureCatalogProtocols(resolve func() map[string][]string) {
+	s.catalogProtocols = resolve
 }
 
 func (s *Service) active(id string) error {
@@ -207,30 +212,8 @@ func (s *Service) Adjust(actor, userID, operationID, reason string, amount int64
 }
 
 func (s *Service) SetPrice(actor string, price model.ModelCreditPrice) error {
-	if _, err := s.identity.RequireAdmin(actor); err != nil {
-		return err
-	}
-	if price.UnitCredits < 0 || price.UnitCredits > 1_000_000_000 {
-		return kernel.BadAuthRequest("单价超出范围")
-	}
-	m, err := s.repo.ChannelModel(price.ChannelModelID)
-	if err != nil {
-		return kernel.BadAuthRequest("模型不存在")
-	}
-	if err := s.repo.PopulateChannelModelVariant(m); err != nil {
-		return err
-	}
-	valid := len(m.Variants) == 0 && price.VariantID == ""
-	for _, v := range m.Variants {
-		if v.ID == price.VariantID && v.Enabled {
-			valid = true
-		}
-	}
-	if !valid {
-		return kernel.BadAuthRequest("模型规格不存在或已停用")
-	}
-	price.ID, price.Version = kernel.NewID(), 1
-	return s.repo.SaveCreditPrice(&price, model.PlatformAudit{ID: kernel.NewID(), ActorID: actor, SubjectID: price.ChannelModelID, Action: "model.price", Reason: "更新积分价格与发布状态"})
+	_, err := s.SetPrices(actor, []PriceRequest{{ModelID: price.ChannelModelID, VariantID: price.VariantID, UnitCredits: price.UnitCredits, Published: price.Published}})
+	return err
 }
 
 func (s *Service) Ledger(userID string, page, limit int) ([]model.CreditLedger, int64, error) {

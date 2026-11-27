@@ -9,6 +9,7 @@ import (
 	"infinite-canvas/backend/internal/database"
 	"infinite-canvas/backend/internal/handler"
 	"infinite-canvas/backend/internal/identity"
+	"infinite-canvas/backend/internal/localcrypto"
 	"infinite-canvas/backend/internal/operations"
 	"infinite-canvas/backend/internal/platformadmin"
 	"infinite-canvas/backend/internal/repository"
@@ -86,6 +87,7 @@ func openPlatform(cfg Config) (result *Runtime, openErr error) {
 	}
 	tasks := svc.TaskService()
 	billing := credits.New(repo, auth, tasks, svc.RuntimePolicy)
+	billing.ConfigureCatalogProtocols(func() map[string][]string { return platformadmin.ProtocolIDs(svc.PluginDomain()) })
 	tasks.ConfigureAdmission(billing)
 	router := gin.New()
 	_ = router.SetTrustedProxies(nil)
@@ -101,7 +103,7 @@ func openPlatform(cfg Config) (result *Runtime, openErr error) {
 	private := session.Group("")
 	private.Use(handler.PlatformReady())
 	handler.RegisterPlatformWorkspace(private, svc, billing, instance.ID)
-	handler.RegisterPlatformAdmin(private, auth, billing, platformadmin.New(auth, repo, svc))
+	handler.RegisterPlatformAdmin(private, auth, billing, platformadmin.New(auth, repo, platformadmin.Options{Secrets: localcrypto.TaskCodec{DataDir: cfg.DataDir}, Plugins: svc.PluginDomain()}))
 	handler.RegisterPlatformCreative(private, svc)
 	handler.RegisterPlatformCanvasOperations(private, svc, operations.NewStore(db))
 	router.NoRoute(func(c *gin.Context) { c.JSON(404, gin.H{"code": 404, "reason": "not_found", "msg": "请求不存在"}) })

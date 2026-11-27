@@ -262,7 +262,7 @@ func (r *Repository) DeleteSystemChannel(id string) error {
 	return r.db.Transaction(func(tx *gorm.DB) error {
 		channelResult := tx.Model(&model.ModelChannel{}).
 			Where("id = ? AND scope = ?", id, model.ChannelScopeSystem).
-			Updates(map[string]any{"api_key": "", "secret_key": "", "enabled": false, "updated_at": now})
+			Updates(map[string]any{"api_key": "", "secret_key": "", "headers_json": "[]", "models_json": "[]", "enabled": false, "updated_at": now})
 		if channelResult.Error != nil {
 			return channelResult.Error
 		}

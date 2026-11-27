@@ -1,7 +1,7 @@
 import { http } from "@/services/api/request";
 import type { ModelProtocolDefinition, ModelProtocolWorkflow, ProtocolCapability } from "@/lib/model-protocols";
 
-type PluginProviderCatalogItem = {
+export type PluginProviderCatalogItem = {
     id: string;
     version: string;
     name: string;

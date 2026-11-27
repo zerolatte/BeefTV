@@ -12,6 +12,46 @@ title: 本地 HTTP API
 
 平台画布保存使用 `POST /api/ops/canvas.document.commit`，请求体为 `{ opId, params: { canvasId, expectedRevision, document } }`。会话决定账号身份，服务端校验画布归属；文档与幂等回执同事务提交。同一 `opId` 和内容重试返回原回执，旧版本提交返回 `409 / stale_revision`。`POST /api/ops/canvas.task.bind` 复用相同账号校验，将已交付任务结果绑定到原节点；不会创建生成任务。`GET /api/ops/external-writes?canvasId=...` 只返回当前账号的画布外部改动记录。其他操作层与外部客户端入口不在平台开放。
 
+## 平台模型与价格管理
+
+以下接口只在账号平台向管理员开放，服务层再次校验权限；写请求沿用平台来源、账号绑定和 CSRF 校验。所有返回值位于统一响应信封的 `data` 内。
+
+| 方法与路径 | 请求与结果 |
+| --- | --- |
+| `GET /api/admin/channels` | `page`、`pageSize`、`q`、`status=enabled\|disabled`；返回 `{ channels, total, page, pageSize }`，默认每页 10 条 |
+| `POST /api/admin/channels` | 连接信息加可选 `initialModels`；一次保存渠道及模型、规格和价格，返回渠道 |
+| `PUT /api/admin/channels/:channelId` | 更新连接信息；启停仅提交 `{ enabled }`，留空密钥保留已存值 |
+| `DELETE /api/admin/channels/:channelId` | 删除渠道及关联模型、规格，撤销价格发布；返回 `{ deleted: true }` |
+| `GET /api/admin/channels/:channelId/models` | `page`、`pageSize`、`q`、`capability`、`status`；返回 `{ items, total, page, pageSize }`，默认每页 20 条 |
+| `POST /api/admin/channels/:channelId/models/batch` | `{ models: ModelSave[] }`，事务内添加所选模型；返回 `{ items }` |
+| `POST /api/admin/channels/:channelId/models` | `ModelSave`，添加一个模型及规格价格，返回模型 |
+| `PUT /api/admin/channels/:channelId/models/:id` | `ModelSave` 更新模型及规格价格，或仅提交 `{ enabled }` 独立启停；返回模型 |
+| `POST /api/admin/channels/probe` | 已存渠道 ID 或未保存连接草稿；返回 `{ models, existingModelIds, durationMs }` |
+| `GET /api/admin/protocols` | 可选 `capability`，返回 `{ providers }`，包含当前可用协议及参数合同 |
+| `POST /api/admin/model-capabilities` | `{ capability, protocol, model, capabilityConfig? }`；返回规范化能力配置，音频返回 `null` |
+| `PUT /api/admin/prices` | `{ modelId, variantId, unitCredits, published }`，明确调整价格与发布状态 |
+| `POST /api/admin/prices/batch` | `{ prices: [{ modelId, variantId, unitCredits, published }] }`，事务内调整多项价格与发布状态；返回 `{ items }` |
+
+渠道搜索、启停筛选、模型搜索和能力／状态筛选先于数据库分页执行。渠道项增加 `totalModels` 和 `availableModels`；可用模型计数包含至少有一个有效发布规格的模型。模型列表将当前规格价格一起返回：`variants[].price` 为价格对象或 `null`，`price` 为遗留无规格模型的价格或 `null`。`variants[].selector` 始终为对象，默认规格返回 `{}`。接口不要求前端获取全平台价格后拼接。不存在的渠道返回 HTTP 404。
+
+删除渠道在单一事务内检查占用、软删除渠道及模型、规格，清除渠道密钥、自定义请求头与模型索引，撤销关联价格发布并记录审计。价格历史、已受理任务的积分快照、任务、素材和积分流水保留；旧报价不能再创建任务。仍有排队、执行、结果取回租约、上游取消请求，或 `reserved`／`review` 积分记录时返回 HTTP 409、`reason=channel_in_use`，须等待任务结束并完成积分核对后重试。任一步失败全部回滚；渠道不存在或已经删除返回 HTTP 404。
+
+模型的 `readiness` 是 `{ state, reason }`。`state` 为 `incomplete`、`unpublished`、`partially_published`、`available`、`channel_disabled` 或 `model_disabled`；对应待配置、未发布、部分规格已发布、可用、渠道停用和模型停用。模型筛选可传这些状态，也支持 `enabled`、`disabled`。列表统计和普通用户目录共用有效规格判断：删除或停用的规格不会因旧价格仍然存在而被视为可用。
+
+`ModelSave` 包含 `modelKey`、`providerModelKey`、`displayName`、`capability`、`protocol`、`enabled`、`capabilityConfig` 及 `variants`。每个模型独立选择协议；能力配置使用管理员能力规范化接口返回的合同，不在客户端复制默认值。每个规格包含 `selector`、`providerModelKey`、`enabled` 和可选 `price: { unitCredits }`。文本、图片、视频的适用规格条件分别由能力与协议校验，音频不增加不存在的能力字段。没有特殊条件时 `selector` 为 `{}`。
+
+积分必须是非负整数。省略 `price` 表示新规格暂不定价、已有规格保留原价；`price: { unitCredits: 0 }` 才表示明确零积分。组合保存不接受发布指令，新增模型／规格一律未发布，随后通过独立价格接口明确发布。文本按调用、图片按张、视频和音频按结果计费。
+
+组合请求先验证全部输入，再在单一数据库事务中保存渠道、模型、规格、价格、渠道模型索引与审计，失败全部回滚。规格由“模型 ID＋规范化条件”识别，不能通过表格行号关联价格；同条件保留规格 ID、已有价格与发布状态，同价保存不增加价格版本，改变条件建立新规格并保持未发布。调价和启停继续使尚未受理的旧报价失效，已受理任务保留自己的价格快照。
+
+批量价格接口一次接受 1～100 个不同的模型规格，先校验全部规格归属和启用状态，再在同一事务中保存价格与审计；任一项无效或写入失败时全部回滚。同单价、同发布状态的重放不增加版本，也不使已有报价失效。前端发布多个规格应提交这一个批量请求。
+
+目录探测请求支持 `channelId`、`baseUrl`、`apiKey`、`headers` 及 `catalogFormat`。有 `channelId` 时由服务端解密读取已存凭据，草稿中提供的连接字段仅覆盖本次请求，不提前保存；`headers` 未提供时沿用已存值，显式空数组表示本次不使用自定义头。`catalogFormat` 默认 `openai`，也可为 `gemini`，只控制目录格式，不修改渠道实际生成配置。
+
+探测只发送目录 GET，最长 25 秒，取消请求会停止上游读取；不会生成任务、冻结／扣除积分、导入模型或写入审计。合法空目录成功返回空 `models`。上游 401／403 返回 `catalog_auth_failed`，404／405／501 返回 `catalog_unsupported`，429 返回 `catalog_rate_limited`，格式异常返回 `catalog_response_invalid`，上述错误通常为 HTTP 502；超时为 HTTP 504、`catalog_timeout`。目录不受支持不能解释为鉴权成功，管理员仍可手动配置。所有错误经过洗敏，不回显上游密钥和内部连接信息。
+
+读取目录本身不入库，保存只处理管理员明确选中的模型。探测响应中的 `existingModelIds` 返回该渠道已配置的模型标识，包含停用模型，供选择目录时标记“已添加”，避免重复加入；草稿连接没有已存模型。已有渠道密钥加密保存，管理响应只用 `hasApiKey`、`hasSecretKey` 表达是否配置，不回显明文；审计正文不包含连接凭据。
+
 以下存量桌面接口说明仅适用于仍保留的桌面源码入口，不代表平台开放这些能力。
 
 # 本地 HTTP API
