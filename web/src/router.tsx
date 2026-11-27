@@ -9,6 +9,7 @@ import { usePluginSlot } from "@/lib/plugins/slot-registry";
 import { FullScreenLoader, WorkspaceRouteLoader } from "@/components/ui/aceternity/full-screen-loader";
 import { loadAgentsPage, loadAssetsPage, loadCanvasPage, loadCanvasProjectPage, loadCreatePage, loadHomePage, loadProjectDetailPage } from "@/lib/workspace-route-modules";
 import { CanvasRefreshShell } from "@/pages/canvas/canvas-refresh-shell";
+import { PlatformCreditShortageHost } from "@/pages/platform/credit-shortage-host";
 import RouteErrorPage from "@/pages/route-error";
 import { isLocalWorkspaceMode, isPlatformWorkspaceMode } from "@/services/workspace-mode";
 import { useUserStore } from "@/stores/use-user-store";
@@ -53,7 +54,10 @@ function WorkspaceLayout() {
     const isCanvasProjectRoute = pathname.startsWith("/canvas/");
     const fallback = isCanvasProjectRoute ? <CanvasRefreshShell /> : <FullScreenLoader label="正在打开创作空间" detail="准备当前页面" />;
     if (isPlatformWorkspaceMode() && (/^\/(skills?|agents|plugins|settings|p)(\/|$)/.test(pathname) || (pathname.startsWith("/admin") && useUserStore.getState().user?.role !== "admin"))) return <Navigate to="/" replace />;
-    return <Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense>;
+    return <>
+        <Suspense fallback={fallback}><UserLayout><Outlet /></UserLayout></Suspense>
+        {isPlatformWorkspaceMode() ? <PlatformCreditShortageHost navigate={(path) => void navigate(path)} /> : null}
+    </>;
 }
 
 function LocalAwareProjectRoute() {

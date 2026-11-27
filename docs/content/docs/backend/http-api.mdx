@@ -8,6 +8,8 @@ title: 本地 HTTP API
 
 `GET /api/workspace/bootstrap` 返回 `profile: platform` 与按实例、用户隔离的命名空间。`GET /api/workspace/model-config` 为脱敏只读目录。`POST /api/tasks/quote` 接收生成请求并返回报价，`POST /api/tasks` 必须带 `quoteId`；重放同一提交返回原任务。`GET /api/credits` 返回可用及冻结积分，`GET /api/credits/ledger` 返回分页流水。
 
+平台生成在取得报价后直接提交，由服务端事务检查积分并冻结。若返回 HTTP 403、`reason: insufficient_credits`，本次任务未创建；前端读取 `GET /api/credits` 的最新 `available` 展示专用提示，保留输入和已有作品，不重复显示通用错误、不自动重发生成。余额查询失败不按零余额处理。其他错误及提交结果不明继续按原有错误或任务回执流程处理。
+
 管理员接口位于 `/api/admin/accounts`、`/api/admin/channels`、`/api/admin/prices`、`/api/admin/usage` 和 `/api/admin/storage`，服务层重新检查权限。没有公开注册、助手、用户渠道写入、任意模型代理与外部 Agent 路由。错误继续使用 HTTP 状态及 `{ code, data, msg, reason }` 信封；例如 `insufficient_credits`、`quote_expired`、`model_changed`、`price_changed`。详细流程见[多用户平台](platform.mdx)。
 
 ## 平台文件存储

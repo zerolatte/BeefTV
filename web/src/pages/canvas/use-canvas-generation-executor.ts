@@ -16,6 +16,8 @@ import { buildCameraPrompt } from "@/lib/canvas/camera-prompt-library";
 import { buildTextRewritePrompt } from "@/lib/prompts";
 import { resolveCanvasStyleExecution } from "@/lib/canvas/canvas-style-execution";
 import { generationErrorMessage } from "@/lib/generation-error";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
+import { restoreRejectedCanvasGenerationNode } from "@/lib/canvas/canvas-generation-rejection";
 import { navigateToSettings } from "@/lib/settings-navigation";
 import { modelGroupReferenceLimits, modelRequestOptions, type ModelRequirements } from "@/lib/model-selection";
 import { referencedAssetIdsInPrompt } from "@/lib/canvas/canvas-resource-references";
@@ -73,6 +75,7 @@ export type CanvasNodeGenerationOptions = {
     context?: { conversationId?: string; messageId?: string };
     retryContext?: { retryOf: string; attemptGroupId: string; clientOperationId: string };
     onTaskUpdate?: (task: GenerationTask) => void;
+    onCreditShortage?: () => void;
     onSubmissionPlan?: (manifest: import("@/services/api/assistant-continuation").AssistantSubmissionManifest) => Promise<void>;
     skipDuplicateConfirmation?: boolean;
 };
@@ -140,6 +143,7 @@ export function useCanvasGenerationExecutor({
                             : node));
                     };
                     const reportError = (error: unknown) => {
+                        if (isPlatformCreditShortageHandled(error)) return;
                         if (controller.signal.aborted || isGenerationCanceled(error)) return;
                         const errText = generationErrorMessage(error);
                         diagnostic(error instanceof Error && error.name === "CanvasPreparationTimeoutError" ? "generation_preflight_timeout" : "generation_preflight_failed", "error", errText);
@@ -554,6 +558,14 @@ export function useCanvasGenerationExecutor({
                             emitPluginEvent("generation.completed", { nodeId, nodeType: mode });
                         } catch (error) {
                             if (isGenerationCanceled(error)) return;
+                            if (isPlatformCreditShortageHandled(error)) {
+                                options?.onCreditShortage?.();
+                                setNodes((current) => current.map((node) => {
+                                    if (node.id !== nodeId && !pendingNodeIds.includes(node.id)) return node;
+                                    return restoreRejectedCanvasGenerationNode(node, inputNodes.find((item) => item.id === node.id));
+                                }));
+                                return;
+                            }
                             const failure = canvasGenerationFailureMetadata(error, { ...generationContext, mode });
                             emitPluginEvent("generation.failed", { nodeId, nodeType: mode, error: failure.errorDetails });
                             if (options?.waitForTaskCapacity && isGenerationTaskCapacityError(error)) {

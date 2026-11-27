@@ -142,6 +142,7 @@ export type CreateTaskInput = {
 };
 export async function createGenerationTask(input: CreateTaskInput, config?: HttpRequestConfig) {
     const { isPlatformWorkspaceMode } = await import("@/services/workspace-mode");
+    let quote: import("./platform").CreditQuote | undefined;
     if (isPlatformWorkspaceMode()) {
         const provider = { ...(input.input?.config as Record<string, unknown> || {}) };
         for (const key of ["baseUrl", "apiKey", "secretKey", "headers", "credentialRef", "referenceAssetOrigin", "referenceMediaTransport"]) delete provider[key];
@@ -149,19 +150,28 @@ export async function createGenerationTask(input: CreateTaskInput, config?: Http
         const operationId = String((input.input?.metadata as Record<string, unknown>).clientOperationId);
         const existing = await findGenerationTaskByOperation(operationId, input.projectId || "", config?.signal as AbortSignal | undefined);
         if (!existing) {
-            const quote = await http.post<import("./platform").CreditQuote>("/tasks/quote", input, config);
-            const { confirmPlatformQuote } = await import("@/services/platform-quote");
-            await confirmPlatformQuote(quote, config?.signal as AbortSignal | undefined);
+            quote = await http.post<import("./platform").CreditQuote>("/tasks/quote", input, config);
             input = { ...input, quoteId: quote.id };
         }
         // 已有任务仍由提交接口核对原始请求摘要，防止同一标识重放不同内容。
     }
-    return http.post<GenerationTask>("/tasks", input, config).then((task) => {
-        recordDiagnosticEvent({ level: "info", category: "task", code: "task_created", message: "任务已创建", taskId: task.id, projectId: task.projectId, canvasId: task.projectId, nodeId: task.clientContext?.nodeId, clientOperationId: task.clientOperationId, traceId: task.traceId || getDiagnosticTraceId(task.id) });
-        publishGenerationTaskTelemetry(task);
-        notifyCanvasTaskCreated(task);
-        return task;
-    });
+
+    let task: GenerationTask;
+    (config?.signal as AbortSignal | undefined)?.throwIfAborted();
+    try {
+        task = await http.post<GenerationTask>("/tasks", input, config);
+    } catch (error) {
+        const { isPlatformCreditShortageError, notifyPlatformCreditShortage } = await import("@/services/platform-credit-shortage");
+        if (!quote || !isPlatformCreditShortageError(error)) throw error;
+        const operationId = String((input.input?.metadata as Record<string, unknown>).clientOperationId);
+        notifyPlatformCreditShortage(error, quote.totalCredits, operationId, config?.signal as AbortSignal | undefined);
+        throw error;
+    }
+
+    recordDiagnosticEvent({ level: "info", category: "task", code: "task_created", message: "任务已创建", taskId: task.id, projectId: task.projectId, canvasId: task.projectId, nodeId: task.clientContext?.nodeId, clientOperationId: task.clientOperationId, traceId: task.traceId || getDiagnosticTraceId(task.id) });
+    publishGenerationTaskTelemetry(task);
+    notifyCanvasTaskCreated(task);
+    return task;
 }
 
 export type GenerationTaskPageRequest = {

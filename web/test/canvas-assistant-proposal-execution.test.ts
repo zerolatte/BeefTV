@@ -29,6 +29,16 @@ test("F04: a validation early return does not claim generation started", async (
     expect(handled).toEqual([]);
 });
 
+test("积分不足已由专用弹窗处理时，助手不重复提示并释放提案提交锁", async () => {
+    const notices: string[] = [];
+    const handled: string[] = [];
+    const args = input({ generate: async (_id, _mode, _prompt, options) => { options?.onCreditShortage?.(); }, notify: (text) => { notices.push(text); }, markHandled: (id) => { handled.push(id); } });
+    await executeAssistantProposal(args);
+    expect(notices).toEqual([]);
+    expect(handled).toEqual([]);
+    expect(args.claims.size).toBe(0);
+});
+
 test("proposal read failures are not reported as proven input drift", async () => {
     const notices: string[] = [];
     let submissions = 0;

@@ -8,6 +8,8 @@ let server: ReturnType<typeof Bun.serve>;
 beforeAll(async () => {
     const stubModules: Record<string, string> = {
         "@/pages/create/creation-runtime": `
+            import { ApiError } from "@/services/api/request";
+            import { notifyPlatformCreditShortage } from "@/services/platform-credit-shortage";
             const store = window.__wiringCalls || (window.__wiringCalls = {
                 submits: [],
                 subscribes: 0,
@@ -30,6 +32,11 @@ beforeAll(async () => {
                     hasNativeEvent: "nativeEvent" in options,
                     hasReactName: "_reactName" in options,
                 });
+                if (window.__rejectCredits) {
+                    const error = new ApiError("积分不足", { status: 403, reason: "insufficient_credits" });
+                    notifyPlatformCreditShortage(error, 12, "creation-test", options.signal);
+                    throw error;
+                }
                 return { text: "生成好了", reasoning: "" };
             };
             export const runBackendGenerationTaskBatch = async () => [];
@@ -76,7 +83,7 @@ beforeAll(async () => {
             };
             export const projectGenerationTaskResult = (task) => task;
             export const applyGenerationConsumerEffect = () => true;
-            export const beginGenerationConsumer = (signal) => ({ signal, dispose: () => {} });
+            export const beginGenerationConsumer = (signal) => ({ signal, release: () => {} });
             export const runGenerationConsumer = (signal, fn) => fn(signal);
             export const recoverCreationTextTask = () => null;
             export const skillRuntime = {
@@ -101,6 +108,7 @@ beforeAll(async () => {
         import { createModelChannel, defaultConfig, useConfigStore } from "@/stores/use-config-store";
         import { useCreationPreferencesStore } from "@/stores/use-creation-preferences-store";
         import { useUserStore } from "@/stores/use-user-store";
+        import { PlatformCreditShortageHost } from "@/pages/platform/credit-shortage-host";
 
         const scenario = new URLSearchParams(window.location.search).get("scenario") || "main";
         const queryClient = new QueryClient();
@@ -260,6 +268,7 @@ beforeAll(async () => {
                                 <WorkspaceTopBar sidebarOpen onToggleSidebar={() => undefined} />
                             </div>
                             {scenario === "conflict" ? <ConflictHarness /> : scenario === "recovery" ? <RecoveryHarness /> : <CreatePage />}
+                            <PlatformCreditShortageHost navigate={() => {}} />
                         </WorkspaceTopBarExtensionProvider>
                     </App>
                 </MemoryRouter>
@@ -339,6 +348,7 @@ beforeAll(async () => {
                 return Response.json({ code: 0, data: {}, msg: "ok" });
             }
             if (path === "/api/skills/added") return Response.json({ code: 0, data: { skills: [] }, msg: "ok" });
+            if (path === "/api/credits") return Response.json({ code: 0, data: { available: 3, frozen: 0 }, msg: "ok" });
             if (path === "/api/creation-conversations" && request.method === "GET") {
                 return Response.json({ code: 0, data: { conversations: Array.from(records.values()), deletedIds: [] }, msg: "ok" });
             }
@@ -367,7 +377,7 @@ beforeAll(async () => {
             });
         },
     });
-    const executablePath = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"].find((path): path is string =>
+    const executablePath = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "C:/Program Files/Google/Chrome Dev/Application/chrome.exe", "C:/Program Files/Google/Chrome/Application/chrome.exe"].find((path): path is string =>
         Boolean(path && existsSync(path)),
     );
     browser = await chromium.launch({ executablePath, headless: true });
@@ -377,6 +387,36 @@ afterAll(async () => {
     await browser?.close();
     server?.stop(true);
 });
+
+test("创作积分不足后保留已有作品、恢复输入并解除忙碌，不新增失败消息", async () => {
+    await fetch(`${server.url}/api/__reset`);
+    const page = await browser.newPage();
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
+    try {
+        await page.goto(`${server.url}?scenario=main`);
+        await page.locator('.creation-mode-button[data-mode="text"]').click();
+        const prompt = page.locator('[aria-label*="创作提示词"]').first();
+        await prompt.fill("第一份作品");
+        await page.locator(".creation-submit:not([disabled])").click();
+        await page.getByText("生成好了", { exact: true }).waitFor();
+        await page.evaluate(() => { (window as unknown as { __rejectCredits: boolean }).__rejectCredits = true; });
+        await prompt.fill("保留这次提示词");
+        await page.locator(".creation-submit:not([disabled])").click();
+        const dialog = page.getByRole("dialog");
+        await dialog.getByText("还差", { exact: false }).waitFor();
+        expect(await dialog.innerText()).toContain("12 积分");
+        expect(await dialog.innerText()).toContain("9 积分");
+        await dialog.getByRole("button", { name: "返回创作" }).click();
+        await dialog.waitFor({ state: "hidden" });
+        await page.locator(".creation-submit:not([disabled])").waitFor();
+        expect(await prompt.textContent()).toContain("保留这次提示词");
+        expect(await page.getByText("生成好了", { exact: true }).count()).toBe(1);
+        expect(await page.getByText("生成失败", { exact: true }).count()).toBe(0);
+        expect(await page.locator(".ant-message-error").count()).toBe(0);
+        expect(errors).toEqual([]);
+    } finally { await page.close(); }
+}, 20_000);
 
 test("homepage defaults to defaultCreationMode, submit click never leaks event to retryContext, and thread toolbar portals into topbar", async () => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });

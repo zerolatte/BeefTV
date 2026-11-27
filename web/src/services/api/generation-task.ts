@@ -184,7 +184,7 @@ export function prepareBackendToolGenerationTask(options: BackendToolGenerationO
 }
 
 export async function runBackendToolGenerationTask(options: BackendToolGenerationOptions): Promise<ToolResponseResult> {
-    const task = await createGenerationTask(prepareBackendToolGenerationTask(options));
+    const task = await createGenerationTask(prepareBackendToolGenerationTask(options), { signal: options.signal });
     options.onTaskCreated?.(task);
     const completed = await waitForGenerationTask(task.id, { signal: options.signal, initialTask: task, onTextDelta: options.onDelta });
     const result = parseBackendGenerationResult(completed);
@@ -287,7 +287,7 @@ async function createBackendGenerationTask(options: BackendGenerationTaskOptions
     const submit = () => {
         throwIfAborted(options.signal);
         return submitGenerationCommand(backendGenerationTaskInput(options, prepared), operationId,
-            (input) => dependencies.createTask(input),
+            (input) => dependencies.createTask(input, { signal: options.signal }),
             dependencies.findTask && options.projectId ? () => dependencies.findTask!(operationId, options.projectId!) : undefined,
             () => !options.signal?.aborted);
     };

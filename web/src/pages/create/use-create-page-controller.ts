@@ -147,6 +147,7 @@ export function useCreatePageController() {
         updateActive,
         applyCanonicalConversation,
         updateConversationMessage,
+        removeConversationMessages,
         startNewConversation,
         continueOnCanvas,
         selectConversation,
@@ -156,6 +157,8 @@ export function useCreatePageController() {
         confirmDeleteConversation,
         renameConversationTitle,
     } = conversationsState;
+    const composerContextRef = useRef({ conversationId: activeConversation?.id, mode });
+    composerContextRef.current = { conversationId: activeConversation?.id, mode };
 
     const preferredModel = mode === "text" ? config.textModel : mode === "image" ? config.imageModel : config.videoModel;
     const hasPrompt = Boolean(prompt.trim());
@@ -471,12 +474,24 @@ export function useCreatePageController() {
             resolveReferenceLinks,
             setBusy,
             setComposerNotice,
-            setPrompt,
-            setAttachments,
+            setPrompt: (value) => { promptRef.current = value; setPrompt(value); },
+            setAttachments: (value) => { attachmentsRef.current = value; setAttachments(value); },
             setDraftReferences,
             setReferenceNotice,
             updateActive,
             updateConversationMessage,
+            removeConversationMessages,
+            restoreRejectedDraft: (conversationId, draft) => {
+                if (composerContextRef.current.conversationId !== conversationId || composerContextRef.current.mode !== draft.mode || promptRef.current || attachmentsRef.current.length) return false;
+                promptRef.current = draft.content;
+                attachmentsRef.current = draft.attachments || [];
+                setPrompt(draft.content);
+                setAttachments(draft.attachments || []);
+                setDraftReferences(draft.references || []);
+                setReferenceNotice("");
+                setComposerNotice("");
+                return true;
+            },
             applyCanonicalConversation,
         });
 

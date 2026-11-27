@@ -8,6 +8,7 @@ import { parseDirectorImageLayout } from "@/lib/canvas/director/director-image-l
 import { persistDirectorImageUpload, persistDirectorLibraryAsset, persistDirectorMediaUpload, type DirectorCanvasImageHandoff } from "@/lib/canvas/director/director-library-persist";
 import { restoreDirectorPlaybackOnEnd, waitForDirectorCaptureCamera } from "@/lib/canvas/director/director-output-camera";
 import { generateDirectorPanorama, recoverDirectorPanoramaTasks } from "@/lib/canvas/director/director-panorama-generation";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 import { compileDirectorPrompt } from "@/lib/canvas/director/director-prompt-compiler";
 import { appendDirectorScreenshot, isDirectorOutputSnapshotCurrent, nextDirectorScreenshotName } from "@/lib/canvas/director/director-session";
 import { createDirectorActorPreset } from "@/lib/canvas/director/director-actor-presets";
@@ -272,6 +273,10 @@ export function useDirectorWorkbenchMedia({
             setPanoramaAIOpen(false);
         }).catch((error) => {
             if (!session.current()) return;
+            if (isPlatformCreditShortageHandled(error)) {
+                setPanoramaAIStatus("");
+                return;
+            }
             const text = error instanceof Error ? error.message : "全景图生成失败";
             setPanoramaAIStatus(text);
             message.error(text);

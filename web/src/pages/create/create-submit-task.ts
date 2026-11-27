@@ -2,6 +2,7 @@ import type { App } from "antd";
 
 import type { createReferenceLinkResolver } from "@/components/generation-reference-links";
 import { explainGenerationError } from "@/lib/generation-error";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 import { normalizeImageValue, normalizeVideoValue, type ImageCapabilityConfig, type VideoCapabilityConfig } from "@/lib/model-capabilities";
 import { declaredOrOmniVideoCapability, isBeefTVModelRoute, resolveVideoOperation } from "@/lib/model-selection";
 import type { GenerationTask } from "@/services/api/task-center";
@@ -150,6 +151,8 @@ interface ExecuteCreateSubmitParams {
     setReferenceNotice: (value: string) => void;
     updateActive: (updater: (conversation: CreationConversation) => CreationConversation) => void;
     updateConversationMessage: (conversationId: string, id: string, updater: (item: CreationMessage) => CreationMessage) => Promise<void>;
+    removeConversationMessages: (conversationId: string, ids: string[]) => Promise<void>;
+    restoreRejectedDraft: (conversationId: string, draft: CreationMessage) => boolean;
     applyCanonicalConversation: (conversationId: string, document: CreationConversation) => void;
 }
 
@@ -188,6 +191,8 @@ export async function executeCreateSubmit(params: ExecuteCreateSubmitParams) {
         setReferenceNotice,
         updateActive,
         updateConversationMessage,
+        removeConversationMessages,
+        restoreRejectedDraft,
         applyCanonicalConversation,
     } = params;
 
@@ -370,12 +375,13 @@ export async function executeCreateSubmit(params: ExecuteCreateSubmitParams) {
             const resultUrls = storedImages.flatMap((entry) => entry.status === "fulfilled" ? entry.value : []);
             const resourceFailures = storedImages.filter((entry) => entry.status === "rejected");
             const failedCount = taskFailures.length + resourceFailures.length;
+            const onlyCreditShortages = taskFailures.length > 0 && taskFailures.every((entry) => isPlatformCreditShortageHandled(entry.reason)) && resourceFailures.length === 0;
             if (!resultUrls.length) {
-                const reason = taskFailures[0]?.reason || resourceFailures[0]?.reason;
+                const reason = resourceFailures[0]?.reason || taskFailures.find((entry) => !isPlatformCreditShortageHandled(entry.reason))?.reason || taskFailures[0]?.reason;
                 throw reason instanceof Error ? reason : new Error("后端任务没有返回图片");
             }
-            if (failedCount) toast.warning(`${resultUrls.length} 张图片已生成，${failedCount} 批生成或保存失败`);
-            updateOriginAssistant((item) => ({ ...item, content: failedCount ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : "图片已生成" }));
+            if (failedCount && !onlyCreditShortages) toast.warning(`${resultUrls.length} 张图片已生成，${failedCount} 批生成或保存失败`);
+            updateOriginAssistant((item) => ({ ...item, content: failedCount && !onlyCreditShortages ? `${resultUrls.length} 张图片已生成，${failedCount} 张失败` : resultUrls.length === 1 ? "图片已生成" : `${resultUrls.length} 张图片已生成` }));
         } else {
             const result = await runtime.runGenerationOperationOnce(retryContext?.clientOperationId, () => runtime.runBackendGenerationTask({
                 resolveReferenceLinks,
@@ -402,6 +408,16 @@ export async function executeCreateSubmit(params: ExecuteCreateSubmitParams) {
         }
         updateOriginAssistant((item) => ({ ...item, status: "done" }));
     } catch (error) {
+        if (isPlatformCreditShortageHandled(error) && boundTaskIds.size === 0) {
+            const restored = abortRef.current === controller && !controller.signal.aborted && restoreRejectedDraft(originConversationId, userMessage);
+            if (abortRef.current === controller) {
+                abortRef.current = null;
+                setBusy(false);
+            }
+            // 已切换会话或输入了新草稿时，保留原用户消息，避免覆盖正在编辑的内容。
+            await removeConversationMessages(originConversationId, restored ? [userMessage.id, assistantMessage.id] : [assistantMessage.id]);
+            return;
+        }
         if (runtime.isGenerationTaskCancelled(error, requestLifecycle.signal)) {
             updateOriginAssistant((item) => ({ ...item, status: "cancelled", content: "已停止" }));
             return;

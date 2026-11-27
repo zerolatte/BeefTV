@@ -206,6 +206,12 @@ export function useCanvasGenerationBatches({ projectId, projectLoaded, nodes, no
                     controller,
                     waitForTaskCapacity: true,
                     skipDuplicateConfirmation: true,
+                    onCreditShortage: () => updateBatch(batch.sourceNodeId, batch.id, (current) => withUpdatedItem(current, item.id, {
+                        status: "failed",
+                        errorCode: "insufficient_credits",
+                        errorDetails: "积分不足，补充积分后请手动重试",
+                        submissionUncertain: false,
+                    })),
                     retryContext:
                         liveNode.metadata?.retryOf && liveNode.metadata.attemptGroupId && liveNode.metadata.taskClientOperationId
                             ? { retryOf: liveNode.metadata.retryOf, attemptGroupId: liveNode.metadata.attemptGroupId, clientOperationId: liveNode.metadata.taskClientOperationId }

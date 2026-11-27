@@ -15,7 +15,7 @@ export default function CreditsPage() {
     const [saving, setSaving] = useState(false);
     const [form] = Form.useForm();
     const { message } = App.useApp();
-    const account = useQuery({ queryKey: ["platform-credits"], queryFn: getCredits, refetchInterval: 10000 });
+    const account = useQuery({ queryKey: ["platform-credits"], queryFn: ({ signal }) => getCredits({ signal }), refetchInterval: 10000 });
     const ledger = useQuery({ queryKey: ["platform-ledger", page], queryFn: () => getCreditLedger(page), refetchInterval: 10000 });
     async function savePassword() {
         if (saving) return;

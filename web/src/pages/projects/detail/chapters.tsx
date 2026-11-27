@@ -72,6 +72,7 @@ import {
 import { ApiError } from "@/services/api/request";
 import { useConfigStore, useEffectiveConfig } from "@/stores/use-config-store";
 import { listGenerationTasks, queryGenerationTask, type GenerationTask } from "@/services/api/task-center";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 
 import { formatCount, formatTime, statusLabel, type ProjectDetailViewProps } from "./shared";
 import { chapterStoryboardAssets, chapterStoryboardCharacters, chapterStoryboardReplaceImpact, storyboardRowsToProjectShots } from "./chapter-storyboard-production";
@@ -398,7 +399,6 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
             operationUnitId = input.chapterId;
             setCharacterExtractOpen(false);
             beginChapterOperation(operationUnitId, "characters");
-            message.info("角色、场景与道具提取任务已开始，可继续编辑或切换章节");
             const assets = await extractChapterAssets(input, { onTaskUpdate: (task) => updateChapterOperation(operationUnitId, "characters", task) });
             const freshCount = await storeExtractedAssets(operationUnitId, assets, { sourceTaskId: assets.taskId });
             if (!freshCount) {
@@ -407,7 +407,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
             }
             message.success(`已提取 ${freshCount} 个角色、场景或道具，请到项目资产确认`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "章节资产提取失败");
+            if (!isPlatformCreditShortageHandled(error)) message.error(error instanceof Error ? error.message : "章节资产提取失败");
         } finally {
             if (operationUnitId) finishChapterOperation(operationUnitId, "characters");
         }
@@ -432,7 +432,6 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
         if (storyboardImpact.shotCount && !(await confirmStoryboardReplacement(storyboardImpact))) return;
         setStoryboardOpen(false);
         beginChapterOperation(unit.id, "storyboard");
-        message.info("分镜生成任务已开始，可继续编辑或切换章节");
         let generated: Awaited<ReturnType<typeof generateChapterStoryboard>> | undefined;
         try {
             generated = await generateChapterStoryboard({
@@ -458,6 +457,7 @@ export default function ProjectChaptersView({ detail, refreshProject }: ProjectD
             message.success(generated.skillCount ? `已生成 ${shotCount} 个分镜，并应用 ${generated.skillCount} 个技能` : `已生成 ${shotCount} 个分镜`);
             navigate(`/projects/${detail.project.id}/workflow/${unit.id}/storyboard`);
         } catch (error) {
+            if (isPlatformCreditShortageHandled(error)) return;
             if (generated && isStoryboardReplacementConflict(error)) {
                 queuePendingStoryboardRecovery({ taskId: generated.taskId, chapterId: unit.id, rows: generated.rows });
                 message.warning("本章分镜已变化，已生成的结果仍保留。核对当前镜头后再写入。");

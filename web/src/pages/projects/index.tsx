@@ -18,6 +18,7 @@ import { projectSummaryCompletion, projectSummaryStage } from "@/lib/project-wor
 import { settingsPath } from "@/lib/settings-navigation";
 import { PromptTemplateOperation, parseGeneratedStory, promptTemplateTaskPlaceholder, shortDramaOutlineVariables } from "@/lib/prompts";
 import { runBackendGenerationTask } from "@/services/api/generation-task";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 import { createProject, deleteProject, duplicateProject, importProjectUnits, listProjectFolders, listProjects, moveProjectToFolder, updateProject, type ProjectSummary } from "@/services/api/projects";
 import { modelDisplayName, useEffectiveConfig } from "@/stores/use-config-store";
 
@@ -127,7 +128,7 @@ export default function ProjectsPage() {
             await queryClient.invalidateQueries({ queryKey: ["projects"] });
             navigate(`/projects/${project.project.id}/overview`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "AI 生成失败，请重试");
+            if (!isPlatformCreditShortageHandled(error)) message.error(error instanceof Error ? error.message : "AI 生成失败，请重试");
         } finally {
             setGenerating(false);
             setGenerationStatus("");

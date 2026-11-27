@@ -18,6 +18,7 @@ import { buildVideoOperationPrompt } from "@/lib/prompts";
 import { backendProviderConfig, logicalModelIDForConfig } from "@/services/api/generation-task";
 
 import { createGenerationTask, formatTaskLog, listGenerationTasks, listTaskLogs, queryGenerationTask, recoverTask, retryGenerationTask, type CreateTaskInput, type GenerationTask, type TaskLog } from "@/services/api/task-center";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 import { canRecoverTaskOutcome, isRegenerateConfirm, isTaskRegenerateBlocked, readTaskOutcome, taskOutcomeCopy } from "@/lib/task-outcome";
 import { syncGenerationTaskToCanvasStore } from "@/lib/canvas/canvas-generation-task-sync";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
@@ -431,7 +432,7 @@ export default function TasksPage() {
             form.resetFields();
             message.success("任务已创建");
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "任务创建失败");
+            if (!isPlatformCreditShortageHandled(error)) message.error(error instanceof Error ? error.message : "任务创建失败");
         } finally {
             setCreating(false);
         }

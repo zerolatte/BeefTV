@@ -1,4 +1,4 @@
-import { abortPlatformRequests, bindPlatformUser, http } from "./request";
+import { abortPlatformRequests, bindPlatformUser, http, type HttpRequestConfig } from "./request";
 
 export type PlatformUser = { id: string; username: string; displayName: string; role: "admin" | "user"; status: "active" | "disabled"; mustChangePassword: boolean };
 export type CreditAccount = { available: number; frozen: number };
@@ -27,7 +27,7 @@ export async function platformLogout() {
     broadcastSessionChange();
     window.location.assign("/");
 }
-export const getCredits = () => http.get<CreditAccount>("/credits");
+export const getCredits = (config?: HttpRequestConfig) => http.get<CreditAccount>("/credits", config);
 export const getCreditLedger = (page: number) => http.get<Page<CreditLedger>>("/credits/ledger", { params: { page, pageSize: 30 } });
 export const getAccounts = (page: number, q: string) => http.get<Page<PlatformUser>>("/admin/accounts", { params: { page, q, pageSize: 30 } });
 export const createAccount = (username: string, displayName: string) => http.post<{ temporaryPassword: string }>("/admin/accounts", { username, displayName });

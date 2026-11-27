@@ -17,7 +17,6 @@ import { useUserStore } from "@/stores/use-user-store";
 import { watchSystemTheme } from "@/stores/use-theme-store";
 import { BeefTVConnectionProvider } from "@/components/layout/beeftv-connection-provider";
 import { isPlatformWorkspaceMode } from "@/services/workspace-mode";
-import { PlatformQuoteHost } from "@/pages/platform/quote-host";
 
 const ClientRootInit = lazy(() => import("@/components/layout/client-root-init").then((module) => ({ default: module.ClientRootInit })));
 
@@ -53,7 +52,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                         children
                     ) : (
                         <WorkspaceBootstrapHydrator>
-                            <ClientRootBoundary><BeefTVConnectionProvider>{children}{isPlatformWorkspaceMode() && <PlatformQuoteHost />}</BeefTVConnectionProvider></ClientRootBoundary>
+                            <ClientRootBoundary><BeefTVConnectionProvider>{children}</BeefTVConnectionProvider></ClientRootBoundary>
                         </WorkspaceBootstrapHydrator>
                     )}
                 </QueryClientProvider>

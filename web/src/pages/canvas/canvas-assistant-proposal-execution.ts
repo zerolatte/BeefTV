@@ -123,12 +123,14 @@ export async function executeAssistantProposal({ proposal, nodes, claims, isHand
             notify("请将配音加入完整制作方案后确认。");
             return;
         }
+        const creditShortages = new Set<string>();
         await Promise.allSettled(confirmedTargets.map(async (node) => {
             if (!node) return;
             await generate(node.id, kind, node.metadata?.composerContent ?? node.metadata?.prompt ?? "", {
                 confirmedModelKey: modelKey,
                 confirmedInputs,
                 clientOperationId: `proposal:${proposal.proposalId}:${node.id}`,
+                onCreditShortage: () => creditShortages.add(node.id),
                 onTaskUpdate: (task) => {
                     if (!task.id) return;
                     receivedTask = true;
@@ -139,9 +141,9 @@ export async function executeAssistantProposal({ proposal, nodes, claims, isHand
                 },
             });
         }));
-        if (!started.size) {
+        if (!started.size && creditShortages.size !== targets.length) {
             notify("未确认有生成任务开始。请检查节点提示和任务列表，再让助手重新提出生成方案。");
-        } else if (started.size < targets.length) {
+        } else if (started.size > 0 && started.size + creditShortages.size < targets.length) {
             notify(`仅 ${started.size}/${targets.length} 个节点确认开始生成。请检查其余节点的提示和任务列表，不要重复提交整项提案。`);
         }
     } finally {

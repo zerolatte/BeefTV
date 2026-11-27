@@ -121,6 +121,22 @@ export function useCreateConversations(params: UseCreateConversationsParams) {
         }
     }, []);
 
+    const removeConversationMessages = useCallback(async (conversationId: string, ids: string[]) => {
+        const removeIds = new Set(ids);
+        const next = updateCreationConversationSnapshot(conversationsRef.current, conversationId, (conversation) => ({
+            ...conversation,
+            updatedAt: new Date().toISOString(),
+            messages: conversation.messages.filter((item) => !removeIds.has(item.id)),
+        }));
+        conversationsRef.current = next;
+        setConversations(next);
+        try {
+            await saveCreationConversations(next);
+        } catch (error) {
+            toastRef.current.error(error instanceof Error ? error.message : "对话保存失败");
+        }
+    }, []);
+
     useEffect(() => {
         let cancelled = false;
         if (demoConversation) {
@@ -417,6 +433,7 @@ export function useCreateConversations(params: UseCreateConversationsParams) {
         updateActive,
         applyCanonicalConversation,
         updateConversationMessage,
+        removeConversationMessages,
         startNewConversation,
         continueOnCanvas,
         selectConversation,

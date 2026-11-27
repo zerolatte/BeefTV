@@ -19,6 +19,7 @@ import { customShotTitle, formatShotOrdinal, normalizeDefaultShotTitle } from "@
 import { declaredOrOmniVideoCapability, isBeefTVModelRoute, resolveCompatibleModel, resolveModelVideoBooleanOptions, resolveVideoOperation, type ModelRequirements } from "@/lib/model-selection";
 import { formatVideoResolutionLabel } from "@/lib/video-generation-options";
 import { submitBackendGenerationTask } from "@/services/api/generation-task";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
 import { type GenerationTask } from "@/services/api/task-center";
 import {
     createUnitWorkflow,
@@ -351,7 +352,7 @@ export default function WorkflowProductionWorkbench(props: Props) {
             await onRefresh();
             message.success(`${productionStageCopy[activeStage as "storyboard" | "previz" | "video"].label}任务已提交`);
         } catch (error) {
-            message.error(error instanceof Error ? error.message : "生成任务提交失败");
+            if (!isPlatformCreditShortageHandled(error)) message.error(error instanceof Error ? error.message : "生成任务提交失败");
         } finally {
             setSubmittingShotIds((current) => {
                 const next = new Set(current);

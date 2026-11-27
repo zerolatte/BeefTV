@@ -7,6 +7,8 @@ import { projectCanvasGenerationSubmission } from "@/lib/canvas/canvas-generatio
 import { planTextGenerationTargets } from "@/lib/canvas/canvas-generation-layout";
 import { CanvasNodeType, type CanvasNodeData } from "@/types/canvas";
 import { useCanvasStore } from "@/stores/canvas/use-canvas-store";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
+import { restoreRejectedCanvasGenerationNode } from "@/lib/canvas/canvas-generation-rejection";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
 
@@ -93,7 +95,7 @@ export async function executeTextGeneration({
     }
 
     textTargetIds.forEach((targetNodeId) => startGenerationRequest(targetNodeId, nodeId, nodeId, controller));
-    const answers = await Promise.all(
+    const answers = await Promise.allSettled(
         textTargetIds.map((targetNodeId) =>
             runCanvasGenerationTaskToConsumer(
                 {
@@ -116,11 +118,19 @@ export async function executeTextGeneration({
                 },
             )
                 .then(() => ({ nodeId: targetNodeId }))
+                .catch((error) => {
+                    if (isPlatformCreditShortageHandled(error)) {
+                        setNodes((current) => current.map((node) => node.id === targetNodeId ? restoreRejectedCanvasGenerationNode(node, node.id === sourceNode?.id ? sourceNode : canvasNodes.find((item) => item.id === node.id)) : node));
+                    }
+                    throw error;
+                })
                 .finally(() => finishGenerationRequest(targetNodeId, controller)),
         ),
     );
     if (controller.signal.aborted) return;
-    void answers;
+    const failure = answers.find((answer) => answer.status === "rejected" && !isPlatformCreditShortageHandled(answer.reason));
+    if (failure?.status === "rejected") throw failure.reason;
+    if (answers.every((answer) => answer.status === "rejected")) throw (answers[0] as PromiseRejectedResult).reason;
     if (isConfigNode) {
         setNodes((current) => current.map((node) => (node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_SUCCESS, errorDetails: undefined, generationErrorCode: undefined, taskOutcome: undefined, failedPromptFingerprint: undefined } } : node)));
     }

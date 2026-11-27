@@ -18,6 +18,8 @@ import { CanvasGenerationTargetSaveError } from "@/services/canvas-generation-er
 import { normalizeImageValue } from "@/lib/model-capabilities";
 import { mergedImageCapabilityConfig } from "@/lib/model-selection";
 import type { GenerationTask } from "@/services/api/task-center";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
+import { restoreRejectedCanvasGenerationNode } from "@/lib/canvas/canvas-generation-rejection";
 
 import type { CanvasGenerationExecution } from "./canvas-generation-executor-types";
 import { canvasGenerationFailureMetadata, canvasImagePendingResultMessage } from "./canvas-generation-failure";
@@ -229,6 +231,7 @@ export async function executeImageGeneration({
     let representativeFailure: GenerationFailureMetadata | undefined;
     let abandoned = false;
     let saveFailureMessage: string | undefined;
+    let creditShortage: unknown;
     const nativeTasks = new Map<number, Promise<GenerationTask>>();
     let nativeBindTail = Promise.resolve();
     await Promise.all(
@@ -348,6 +351,16 @@ export async function executeImageGeneration({
                     return false;
                 }
                 if (!isCurrent() || isGenerationCanceled(error)) return false;
+                if (isPlatformCreditShortageHandled(error)) {
+                    creditShortage = error;
+                    setNodes((current) => {
+                        const next = current.map((node) => node.id === targetId ? restoreRejectedCanvasGenerationNode(node, node.id === sourceNode?.id ? sourceNode : canvasNodes.find((item) => item.id === node.id)) : node);
+                        nodesRef.current = next;
+                        if (projectId) useCanvasStore.getState().updateProject(projectId, { nodes: next });
+                        return next;
+                    });
+                    return false;
+                }
                 if (error instanceof CanvasGenerationTargetSaveError) saveFailureMessage = error.message;
                 const failure = canvasGenerationFailureMetadata(error, { prompt: effectivePrompt, referenceImages });
                 if (!representativeFailure || failure.generationErrorCode === CONTENT_MODERATION_ERROR_CODE) representativeFailure = failure;
@@ -366,6 +379,7 @@ export async function executeImageGeneration({
     );
     if (count > 1) finishGenerationRequest(rootId, controller);
     if (abandoned) return;
+    if (creditShortage && !hasSuccess && !hasFailure) throw creditShortage;
     if (controller.signal.aborted) {
         setNodes((current) => {
             const ids = new Set([rootId, ...childIds]);

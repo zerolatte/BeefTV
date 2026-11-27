@@ -17,6 +17,10 @@ let hydrate: (context: any) => Promise<any> = async (context) => context;
 let executeVideo = async (input: any) => { dispatched++; input.bindGenerationTask(input.nodeId, { id: "task" }); };
 const react = await import("react");
 const clientDiagnostics = await import("@/services/diagnostics/client-diagnostics");
+// 先加载真实元数据恢复依赖，避免生命周期专用的窄桩替换它们的配置合同。
+await import("@/lib/canvas/canvas-generation-rejection");
+const { ApiError, apiClient } = await import("@/services/api/request");
+const { notifyPlatformCreditShortage, subscribePlatformCreditShortages } = await import("@/services/platform-credit-shortage");
 mock.module("@/lib/canvas/canvas-generation-config", () => ({ resolvedCanvasGenerationRequirements: (config: any, node: any, capability: string, input: any) => ({ capability, input, videoSeconds: config.videoSeconds, videoOperation: node?.metadata?.videoEditOperation }) }));
 mock.module("react", () => ({ ...react, default: react.default, useCallback: (fn: any) => fn, useRef: (value: any) => ({ current: value }) }));
 mock.module("antd", () => ({ App: { useApp: () => ({ modal: { confirm: (input: any) => { confirmations.push(input); return { destroy: () => input.afterClose() }; } }, message: {
@@ -127,6 +131,28 @@ assert(failedDiag.message.includes("refs=i:0,v:0,a:0,c:0"), "expected ref counts
 assert(failedDiag.message.includes("角色引用未关联短剧项目"), "expected failure reason in diagnostic message");
 assert(diagnostics.some((e) => e.code === "generation_preflight_timeout"));
 assert(diagnostics.some((e) => e.code === "generation_confirmation_cancelled"));
+
+// 积分准入拒绝释放忙碌和提交锁，恢复旧作品，不重复弹通用错误。
+const beforeShortageErrors = errors.length;
+const originalRequest = apiClient.request;
+apiClient.request = (async () => ({ status: 200, data: { code: 0, data: { available: 0, frozen: 0 } } })) as typeof apiClient.request;
+const stopShortage = subscribePlatformCreditShortages(() => {});
+let rejectedCount = 0;
+executeVideo = async () => {
+    const error = new ApiError("积分不足", { status: 403, reason: "insufficient_credits" });
+    notifyPlatformCreditShortage(error, 12, "fixture-shortage");
+    throw error;
+};
+await generate("video", "video", "积分不足测试", { onCreditShortage: () => { rejectedCount++; } });
+assert.equal(rejectedCount, 1);
+assert.equal(requests.size, 0);
+assert.equal(running, null);
+assert.equal(nodesRef.current[0].metadata.content, "old-result");
+assert.equal(nodesRef.current[0].metadata.status, "success");
+assert.equal(errors.length, beforeShortageErrors);
+assert.equal(progressEntries().length, 0);
+stopShortage();
+apiClient.request = originalRequest;
 
 // Keep the first result waiting while the same source prepares a new request.
 let firstExecution: any;

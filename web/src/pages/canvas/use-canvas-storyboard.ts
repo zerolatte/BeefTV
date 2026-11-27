@@ -30,6 +30,8 @@ import { navigateToSettings } from "@/lib/settings-navigation";
 import { estimateGenerationCost, type CostEstimateTarget } from "@/services/api/cost-estimate";
 import type { Skill } from "@/services/api/skills";
 import { createGenerationTask, waitForGenerationTask } from "@/services/api/task-center";
+import { isPlatformCreditShortageHandled } from "@/services/platform-credit-shortage";
+import { restoreRejectedCanvasGenerationNode } from "@/lib/canvas/canvas-generation-rejection";
 import { skillRuntime } from "@/services/skill-runtime";
 import { submitStoryboardTask } from "@/services/storyboard-submission";
 import { getActiveUserScope } from "@/lib/user-scope";
@@ -233,7 +235,7 @@ export function useCanvasStoryboard({
                 const confirmed = await confirmGenerationSubmission(1, generationConfig.model, `专业拆镜${(scriptNode.metadata?.storyboard?.rows || []).length ? "（替换现有镜头，保留原媒体）" : ""}`);
                 if (!confirmed) return undefined;
                 assertCurrent();
-                return createGenerationTask(request);
+                return createGenerationTask(request, { signal });
             })();
             if (!task) {
                 if (!signal.aborted && scope === getActiveUserScope()) setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: scriptNode.metadata?.status || NODE_STATUS_IDLE, taskStage: undefined } } : node));
@@ -285,6 +287,10 @@ export function useCanvasStoryboard({
             return true;
         } catch (error) {
             if (signal.aborted || scope !== getActiveUserScope()) return false;
+            if (isPlatformCreditShortageHandled(error)) {
+                setNodes((current) => current.map((node) => node.id === nodeId ? restoreRejectedCanvasGenerationNode(node, scriptNode) : node));
+                return false;
+            }
             const details = generationErrorMessage(error);
             setNodes((current) => current.map((node) => node.id === nodeId ? { ...node, metadata: { ...node.metadata, status: NODE_STATUS_ERROR, errorDetails: details } } : node));
             message.error(details);
